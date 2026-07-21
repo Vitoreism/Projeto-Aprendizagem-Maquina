@@ -1,8 +1,10 @@
 import requests
 import gzip
 import io
+import os
 import re
 import json
+import pandas as pd
 from typing import Dict
 from bs4 import BeautifulSoup
 import time
@@ -93,12 +95,10 @@ def get_links_apartamentos_venda_jp():
 
 def extrair_dados_do_anuncio(pagina, url):
     """
-    Usa o Playwright (reutilizando a página) para renderizar o JavaScript antes de extrair os dados.
+    Usa o Playwright (reutilizando a página) para extrair os dados estruturados e limpos.
     """
     try:
-        print(f"Carregando dados estruturados: {url}")
         pagina.goto(url, wait_until="networkidle", timeout=30000)
-        
         html_renderizado = pagina.content()
         soup = BeautifulSoup(html_renderizado, 'html.parser')
         dados_imovel = {'url_anuncio': url}
@@ -107,8 +107,13 @@ def extrair_dados_do_anuncio(pagina, url):
         titulo_tag = soup.find('h1')
         dados_imovel['titulo'] = titulo_tag.get_text(strip=True) if titulo_tag else None
 
+        # Preço de venda limpo (sem "R$")
         preco_tag = soup.select_one("b span[class*='clamp']") or soup.select_one("span[class*='clamp']")
-        dados_imovel['preco_venda'] = preco_tag.get_text(strip=True) if preco_tag else None
+        if preco_tag:
+            preco_texto = preco_tag.get_text(strip=True)
+            dados_imovel['preco_venda'] = preco_texto.replace("R$", "").strip()
+        else:
+            dados_imovel['preco_venda'] = None
 
         endereco_tag = soup.find('address')
         endereco = endereco_tag.get_text(strip=True) if endereco_tag else ""
@@ -123,8 +128,24 @@ def extrair_dados_do_anuncio(pagina, url):
                 if p_tag:
                     chave_crua = p_tag.get('aria-label').lower()
                     chave_formatada = chave_crua.replace('-', '_').replace(' ', '_')
-                    valor = p_tag.get_text(strip=True)
-                    dados_imovel[chave_formatada] = valor
+                    
+                    texto_bruto = p_tag.get_text(strip=True)
+                    
+                    # Remove o nome da chave de forma inteligente
+                    valor_limpo = re.sub(rf"^{re.escape(chave_crua)}", "", texto_bruto, flags=re.IGNORECASE).strip()
+                    
+                    if not valor_limpo or valor_limpo == texto_bruto:
+                        valor_limpo = re.sub(r"^(área útil|área total|quartos|suítes|banheiros|garagens)\s*", "", texto_bruto, flags=re.IGNORECASE).strip()
+
+                    valor_final = valor_limpo if valor_limpo else texto_bruto
+
+                    # ==========================================
+                    # NOVO: Remove "m²" se a chave for relacionada à área
+                    # ==========================================
+                    if "area" in chave_formatada:
+                        valor_final = re.sub(r"m²", "", valor_final, flags=re.IGNORECASE).strip()
+
+                    dados_imovel[chave_formatada] = valor_final
 
         # 3. EXTRAS E COMODIDADES
         container_principal = soup.select_one("div[class*='optionalItemsContainer']")
@@ -142,7 +163,7 @@ def extrair_dados_do_anuncio(pagina, url):
         return dados_imovel
 
     except Exception as e:
-        print(f"Erro ao processar dados de {url}: {e}")
+        print(f"Erro ao processar dados estruturados de {url}: {e}")
         return None
 
 
@@ -216,25 +237,79 @@ def mapear_todas_caracteristicas(lista_links_teste):
     }
 
 
-if __name__ == "__main__":
-   
-   # links_finais = get_links_apartamentos_venda_jp()
-    #print(links_finais[:50])
+def main():
+    print("🚀 Iniciando pipeline de extração de imóveis - Chaves na Mão (João Pessoa)\n")
     
-   # print("\n\n")
-    # Exemplo de teste chamando a função de mapeamento otimizada:
-    #link_teste = ["https://www.chavesnamao.com.br/imovel/apartamento-a-venda-4-quartos-com-garagem-pb-joao-pessoa-altiplano-cabo-branco-220m2-RS2400000/id-32288846/"]
-    #print(mapear_todas_caracteristicas(link_teste))
-    link_teste = "https://www.chavesnamao.com.br/imovel/apartamento-a-venda-4-quartos-com-garagem-pb-joao-pessoa-altiplano-cabo-branco-220m2-RS2400000/id-32288846/"
+    # Passo 1: Coleta todos os links válidos através do sitemap
+    links_finais = get_links_apartamentos_venda_jp()
     
-    # Inicia o Playwright e abre a "aba" (pagina)
+    if not links_finais:
+        print("❌ Nenhum link encontrado. Encerrando o pipeline.")
+        return
+
+    print(f"\n⚙️ Iniciando extração de dados para {len(links_finais)} imóveis...")
+    
+    arquivo_saida = "imoveis_joao_pessoa.csv"
+    lote_dados = []
+    
+    # Passo 2: Abre o Playwright uma única vez para processar os anúncios em lote
     with sync_playwright() as p:
         navegador = p.chromium.launch(headless=True)
         pagina = navegador.new_page()
         
-        descricao = extrair_descricao_anuncio(pagina, link_teste)
+        for i, link in enumerate(links_finais):
+            print(f"[{i+1}/{len(links_finais)}] Processando: {link}")
+            
+            # Extrai dados estruturados e descrição usando a mesma aba aberta
+            dados = extrair_dados_do_anuncio(pagina, link)
+            
+            if dados:
+                descricao = extrair_descricao_anuncio(pagina, link)
+                dados['descricao_completa'] = descricao
+                lote_dados.append(dados)
+            
+            # Passo 3: Salvamento em lote a cada 50 imóveis para garantir segurança contra falhas
+            if (i + 1) % 50 == 0 or (i + 1) == len(links_finais):
+                if lote_dados:
+                    df = pd.DataFrame(lote_dados)
+                    # Se o arquivo já existir, adiciona sem reescrever o cabeçalho
+                    header_existente = os.path.exists(arquivo_saida)
+                    df.to_csv(arquivo_saida, mode='a', index=False, header=not header_existente)
+                    print(f"💾 Lote salvo com sucesso no arquivo '{arquivo_saida}'.")
+                    lote_dados = [] # Limpa a memória do lote atual
+            
+            time.sleep(random.uniform(0.5, 1.5))
+            
+        navegador.close()
         
-        print("\n--- DESCRIÇÃO EXTRAÍDA ---")
-        print(descricao)
+    print(f"\n🎉 Pipeline concluído com sucesso! Todos os dados salvos em '{arquivo_saida}'.")
+
+if __name__ == "__main__":
+    # main()
+    links = [
+        "https://www.chavesnamao.com.br/imovel/apartamento-a-venda-4-quartos-com-garagem-pb-joao-pessoa-altiplano-cabo-branco-220m2-RS2400000/id-32288846/",
+        "https://www.chavesnamao.com.br/imovel/apartamento-a-venda-3-quartos-com-garagem-sc-navegantes-centro-170m2-RS1200000/id-30455445/"
+    ]
+    
+    # Inicializa o Playwright e cria a página (aba) isolada para o teste
+    with sync_playwright() as p:
+        navegador = p.chromium.launch(headless=True)
+        pagina = navegador.new_page()
         
+        for i, link in enumerate(links):
+            print(f"\n--- TESTANDO ANÚNCIO [{i+1}/{len(links)}] ---")
+            
+            # Chama a função passando a página e o link atual
+            dados_imovel = extrair_dados_do_anuncio(pagina, link)
+            
+            if dados_imovel:
+                # Opcional: já testa também a extração da descrição integrada na mesma aba
+                descricao = extrair_descricao_anuncio(pagina, link)
+                dados_imovel['descricao_completa'] = descricao
+                
+                # Imprime o resultado formatado em JSON para validação visual
+                print(json.dumps(dados_imovel, indent=4, ensure_ascii=False))
+            else:
+                print(f"❌ Falha ao extrair dados do link: {link}")
+                
         navegador.close()
