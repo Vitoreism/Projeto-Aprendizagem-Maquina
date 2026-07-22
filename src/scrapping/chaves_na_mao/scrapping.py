@@ -57,7 +57,7 @@ class ScraperChavesNaMao:
                 
                 for link_original in urls_imoveis:
                     link_teste = link_original.lower()
-                    if ("joao-pessoa" in link_teste and "apartamento" in link_teste and 
+                    if ("pb-joao-pessoa" in link_teste and "apartamento" in link_teste and 
                         "venda" in link_teste and not ("aluguel" in link_teste or "locacao" in link_teste)):
                         links_joao_pessoa.append(link_original)
                         encontrados_neste_sitemap += 1
