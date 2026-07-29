@@ -19,6 +19,10 @@ class LinkCollector:
     def __init__(self, page: Page):
         self.page = page
 
+    def set_page(self, page: Page) -> None:
+        """Atualiza a referência da página ativa após reciclagem de contexto."""
+        self.page = page
+
     def detect_partition_pages(self, partition_url: str) -> int:
         """Detecta o total de páginas disponíveis em uma partição de busca."""
         try:
@@ -36,7 +40,7 @@ class LinkCollector:
                     paginas = min((total // 24) + 1, 100)
                     return max(paginas, 1)
 
-            nums = [int(m.group(1)) for a in soup.find_all('a', href=True) if (m := re.search(r'pagina=(\d+)', a.get('href', '')))]
+            nums = [int(m.group(1)) for a in soup.find_all('a', href=True) if (m := re.search(r'pagina=(\d+)', a.get('href') or ''))]
             if nums:
                 return min(max(nums), 100)
         except Exception as e:
@@ -55,8 +59,8 @@ class LinkCollector:
 
             links = []
             for a in soup.find_all('a', href=True):
-                href = a['href']
-                if '/imovel/' in href and 'joao-pessoa' in href.lower():
+                href = a.get('href')
+                if href and '/imovel/' in href and 'joao-pessoa' in href.lower():
                     url_completa = href if href.startswith('http') else f"https://www.zapimoveis.com.br{href}"
                     links.append(url_completa)
 

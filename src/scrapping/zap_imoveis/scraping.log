@@ -24,3 +24,92 @@ Checkpoints Efetuados   : 1
 Arquivo de Log Completo : C:\Users\Administrator\Desktop\Universidade\projeto_ml\src\scrapping\zap_imoveis\scraping.log
 Relatório Estruturado  : C:\Users\Administrator\Desktop\Universidade\projeto_ml\src\scrapping\zap_imoveis\execution_report.json
 =======================================================
+
+=======================================================
+SESSÃO DE RASPAGEM INICIADA EM: 2026-07-29 17:19:21
+=======================================================
+[2026-07-29 17:19:21] [PHASE] 
+[FASE: INICIALIZAÇÃO] Carregando estado do scraper e base existente
+[2026-07-29 17:19:21] [INFO] Arquivo de saída: C:\Users\Administrator\Desktop\Universidade\projeto_ml\src\scrapping\zap_imoveis\imoveis_joao_pessoa_zap.json
+[2026-07-29 17:19:21] [INFO] Imóveis pré-existentes na base: 358
+[2026-07-29 17:19:21] [INFO] 154 partições de busca geradas (Bairros x Faixas de Preço).
+[2026-07-29 17:19:21] [PHASE] 
+[FASE: EXECUÇÃO] Iniciando raspagem particionada das URLs e dados
+[2026-07-29 17:19:21] [PARTITION] [*] Partição [1/154]: João Pessoa (Geral) - Até R$ 250k
+[2026-07-29 17:21:50] [PARTITION_RESULT]    [+] Partição 'João Pessoa (Geral) - Até R$ 250k' concluída: 100 págs | 964 novos links | 975 totais
+[2026-07-29 17:24:37] [ERROR]    [-] Falha no imóvel 47/964: https://www.zapimoveis.com.br/imovel/venda-apartamento-1-quarto-jardim-oceania-joao-pessoa-33m2-id-2897518701/?source=ranking%2Crp (Erro: 'NoneType' object is not subscriptable)
+[2026-07-29 17:24:40] [ERROR]    [-] Falha no imóvel 48/964: https://www.zapimoveis.com.br/imovel/venda-apartamento-1-quarto-com-piscina-jardim-oceania-joao-pessoa-49m2-id-2897481041/?source=ranking%2Crp (Erro: 'NoneType' object is not subscriptable)
+[2026-07-29 17:24:43] [ERROR]    [-] Falha no imóvel 49/964: https://www.zapimoveis.com.br/imovel/venda-apartamento-3-quartos-com-piscina-jardim-oceania-joao-pessoa-72m2-id-2885002895/?source=ranking%2Crp (Erro: 'NoneType' object is not subscriptable)
+[2026-07-29 17:24:45] [ERROR]    [-] Falha no imóvel 50/964: https://www.zapimoveis.com.br/imovel/venda-apartamento-2-quartos-com-piscina-altiplano-cabo-branco-joao-pessoa-59m2-id-2884476080/?source=ranking%2Crp (Erro: 'NoneType' object is not subscriptable)
+[2026-07-29 17:24:45] [CHECKPOINT]   [CHECKPOINT #1] +49 imóveis salvos. Base total: 407
+[2026-07-29 17:24:49] [ERROR]    [-] Falha no imóvel 51/964: https://www.zapimoveis.com.br/imovel/venda-apartamento-2-quartos-com-piscina-jardim-cidade-universitaria-joao-pessoa-59m2-id-2846684931/?source=ranking%2Crp (Erro: 'NoneType' object is not subscriptable)
+[2026-07-29 17:24:51] [ERROR]    [-] Falha no imóvel 52/964: https://www.zapimoveis.com.br/imovel/venda-apartamento-3-quartos-com-piscina-miramar-joao-pessoa-81m2-id-2900288822/?source=ranking%2Crp (Erro: 'NoneType' object is not subscriptable)
+[2026-07-29 17:24:54] [ERROR]    [-] Falha no imóvel 53/964: https://www.zapimoveis.com.br/imovel/venda-apartamento-2-quartos-com-piscina-jardim-oceania-joao-pessoa-64m2-id-2511283780/?source=ranking%2Crp (Erro: 'NoneType' object is not subscriptable)
+[2026-07-29 17:24:56] [ERROR]    [-] Falha no imóvel 54/964: https://www.zapimoveis.com.br/imovel/venda-apartamento-2-quartos-com-piscina-jardim-oceania-joao-pessoa-62m2-id-2887273677/?source=ranking%2Crp (Erro: 'NoneType' object is not subscriptable)
+[2026-07-29 17:24:59] [ERROR]    [-] Falha no imóvel 55/964: https://www.zapimoveis.com.br/imovel/venda-apartamento-3-quartos-com-piscina-agua-fria-joao-pessoa-67m2-id-2901243411/?source=ranking%2Crp (Erro: 'NoneType' object is not subscriptable)
+[2026-07-29 17:25:01] [ERROR]    [-] Falha no imóvel 56/964: https://www.zapimoveis.com.br/imovel/venda-apartamento-2-quartos-valentina-de-figueiredo-joao-pessoa-48m2-id-2871608978/?source=ranking%2Crp (Erro: 'NoneType' object is not subscriptable)
+[2026-07-29 17:25:04] [ERROR]    [-] Falha no imóvel 57/964: https://www.zapimoveis.com.br/imovel/venda-apartamento-2-quartos-com-piscina-aeroclube-joao-pessoa-57m2-id-2892099018/?source=ranking%2Crp (Erro: 'NoneType' object is not subscriptable)
+[2026-07-29 17:25:07] [ERROR]    [-] Falha no imóvel 58/964: https://www.zapimoveis.com.br/imovel/venda-apartamento-4-quartos-com-escritorio-altiplano-cabo-branco-joao-pessoa-pb-220m2-id-2861558959/?source=ranking%2Crp (Erro: 'NoneType' object is not subscriptable)
+[2026-07-29 17:25:09] [ERROR]    [-] Falha no imóvel 59/964: https://www.zapimoveis.com.br/imovel/venda-apartamento-3-quartos-com-janelas-grandes-manaira-joao-pessoa-pb-86m2-id-2894128119/?source=ranking%2Crp (Erro: 'NoneType' object is not subscriptable)
+[2026-07-29 17:25:12] [ERROR]    [-] Falha no imóvel 60/964: https://www.zapimoveis.com.br/imovel/venda-apartamento-2-quartos-com-area-de-servico-aeroclube-joao-pessoa-51m2-id-2890733042/?source=ranking%2Crp (Erro: 'NoneType' object is not subscriptable)
+[2026-07-29 17:25:14] [ERROR]    [-] Falha no imóvel 61/964: https://www.zapimoveis.com.br/imovel/venda-apartamento-2-quartos-com-varanda-bessa-joao-pessoa-52m2-id-2890736687/?source=ranking%2Crp (Erro: 'NoneType' object is not subscriptable)
+[2026-07-29 17:25:17] [ERROR]    [-] Falha no imóvel 62/964: https://www.zapimoveis.com.br/imovel/venda-apartamento-2-quartos-com-cozinha-aeroclube-joao-pessoa-51m2-id-2873501893/?source=ranking%2Crp (Erro: 'NoneType' object is not subscriptable)
+[2026-07-29 17:25:20] [ERROR]    [-] Falha no imóvel 63/964: https://www.zapimoveis.com.br/imovel/venda-apartamento-2-quartos-com-piscina-jardim-oceania-joao-pessoa-63m2-id-2880836996/?source=ranking%2Crp (Erro: 'NoneType' object is not subscriptable)
+[2026-07-29 17:25:23] [ERROR]    [-] Falha no imóvel 64/964: https://www.zapimoveis.com.br/imovel/venda-apartamento-2-quartos-com-piscina-bancarios-joao-pessoa-50m2-id-2900706227/?source=ranking%2Crp (Erro: 'NoneType' object is not subscriptable)
+[2026-07-29 17:25:25] [ERROR]    [-] Falha no imóvel 65/964: https://www.zapimoveis.com.br/imovel/venda-apartamento-2-quartos-com-piscina-bessa-joao-pessoa-59m2-id-2858453155/?source=ranking%2Crp (Erro: 'NoneType' object is not subscriptable)
+[2026-07-29 17:25:27] [ERROR]    [-] Falha no imóvel 66/964: https://www.zapimoveis.com.br/imovel/venda-apartamento-2-quartos-bessa-joao-pessoa-52m2-id-2875176826/?source=ranking%2Crp (Erro: 'NoneType' object is not subscriptable)
+[2026-07-29 17:25:31] [ERROR]    [-] Falha no imóvel 67/964: https://www.zapimoveis.com.br/imovel/venda-apartamento-2-quartos-com-piscina-aeroclube-joao-pessoa-56m2-id-2827669116/?source=ranking%2Crp (Erro: 'NoneType' object is not subscriptable)
+[2026-07-29 17:25:33] [ERROR]    [-] Falha no imóvel 68/964: https://www.zapimoveis.com.br/imovel/venda-apartamento-2-quartos-com-piscina-manaira-joao-pessoa-57m2-id-2897483591/?source=ranking%2Crp (Erro: 'NoneType' object is not subscriptable)
+[2026-07-29 17:25:35] [ERROR]    [-] Falha no imóvel 69/964: https://www.zapimoveis.com.br/imovel/venda-apartamento-3-quartos-ipes-joao-pessoa-95m2-id-2901114100/?source=ranking%2Crp (Erro: 'NoneType' object is not subscriptable)
+[2026-07-29 17:25:38] [ERROR]    [-] Falha no imóvel 70/964: https://www.zapimoveis.com.br/imovel/venda-apartamento-2-quartos-cidade-dos-colibris-joao-pessoa-58m2-id-2886546422/?source=ranking%2Crp (Erro: 'NoneType' object is not subscriptable)
+[2026-07-29 17:25:41] [ERROR]    [-] Falha no imóvel 71/964: https://www.zapimoveis.com.br/imovel/venda-apartamento-3-quartos-com-piscina-brisamar-joao-pessoa-90m2-id-2883520633/?source=ranking%2Crp (Erro: 'NoneType' object is not subscriptable)
+[2026-07-29 17:25:44] [ERROR]    [-] Falha no imóvel 72/964: https://www.zapimoveis.com.br/imovel/venda-cobertura-2-quartos-com-piscina-cabo-branco-joao-pessoa-pb-122m2-id-2830363222/?source=ranking%2Crp (Erro: 'NoneType' object is not subscriptable)
+[2026-07-29 17:25:46] [ERROR]    [-] Falha no imóvel 73/964: https://www.zapimoveis.com.br/imovel/venda-apartamento-2-quartos-com-area-de-servico-jose-americo-de-almeida-joao-pessoa-56m2-id-2890727851/?source=ranking%2Crp (Erro: 'NoneType' object is not subscriptable)
+[2026-07-29 17:25:49] [ERROR]    [-] Falha no imóvel 74/964: https://www.zapimoveis.com.br/imovel/venda-apartamento-2-quartos-com-piscina-jardim-cidade-universitaria-joao-pessoa-53m2-id-2870101082/?source=ranking%2Crp (Erro: 'NoneType' object is not subscriptable)
+[2026-07-29 17:28:19] [CHECKPOINT]   [CHECKPOINT #2] +24 imóveis salvos. Base total: 431
+[2026-07-29 17:28:20] [ERROR]    [-] Falha no imóvel 75/964: https://www.zapimoveis.com.br/imovel/venda-apartamento-2-quartos-com-piscina-jardim-cidade-universitaria-joao-pessoa-60m2-id-2881005403/?source=ranking%2Crp (Erro: Page.goto: Connection closed while reading from the driver)
+[2026-07-29 17:28:20] [WARN] 
+[!] Encerrando loop de partições (Parada solicitada).
+
+=======================================================
+SESSÃO DE RASPAGEM INICIADA EM: 2026-07-29 17:30:12
+=======================================================
+[2026-07-29 17:30:12] [PHASE] 
+[FASE: INICIALIZAÇÃO] Carregando estado do scraper e base existente
+[2026-07-29 17:30:12] [INFO] Arquivo de saída: C:\Users\Administrator\Desktop\Universidade\projeto_ml\src\scrapping\zap_imoveis\imoveis_joao_pessoa_zap.json
+[2026-07-29 17:30:12] [INFO] Imóveis pré-existentes na base: 563
+[2026-07-29 17:30:12] [INFO] 154 partições de busca geradas (Bairros x Faixas de Preço).
+[2026-07-29 17:30:12] [PHASE] 
+[FASE: EXECUÇÃO] Iniciando raspagem particionada das URLs e dados
+[2026-07-29 17:30:31] [PARTITION] [*] Partição [1/154]: João Pessoa (Geral) - Até R$ 250k
+[2026-07-29 17:32:54] [PARTITION_RESULT]    [+] Partição 'João Pessoa (Geral) - Até R$ 250k' concluída: 100 págs | 794 novos links | 807 totais
+[2026-07-29 17:35:49] [CHECKPOINT]   [CHECKPOINT #1] +49 imóveis salvos. Base total: 612
+[2026-07-29 18:00:08] [CHECKPOINT]   [CHECKPOINT #2] +32 imóveis salvos. Base total: 644
+[2026-07-29 18:00:09] [ERROR]    [-] Falha no imóvel 83/794: https://www.zapimoveis.com.br/imovel/venda-apartamento-2-quartos-com-piscina-jardim-oceania-joao-pessoa-57m2-id-2900301882/?source=ranking%2Crp (Erro: Page.goto: Target page, context or browser has been closed
+Call log:
+  - navigating to "https://www.zapimoveis.com.br/imovel/venda-apartamento-2-quartos-com-piscina-jardim-oceania-joao-pessoa-57m2-id-2900301882/?source=ranking%2Crp", waiting until "domcontentloaded"
+)
+[2026-07-29 18:00:09] [WARN] 
+[!] Encerrando loop de partições (Parada solicitada).
+
+=======================================================
+SESSÃO DE RASPAGEM INICIADA EM: 2026-07-29 18:15:55
+=======================================================
+[2026-07-29 18:15:55] [PHASE] 
+[FASE: INICIALIZAÇÃO] Carregando estado do scraper, sessão e base existente
+[2026-07-29 18:15:55] [INFO] Arquivo de saída: C:\Users\Administrator\Desktop\Universidade\projeto_ml\src\scrapping\zap_imoveis\imoveis_joao_pessoa_zap.json
+[2026-07-29 18:15:55] [INFO] Imóveis pré-existentes na base: 407
+[2026-07-29 18:15:55] [INFO] 154 partições de busca geradas (Bairros x Faixas de Preço).
+[2026-07-29 18:15:55] [PHASE] 
+[FASE: EXECUÇÃO] Iniciando raspagem particionada das URLs e dados com resiliência
+[2026-07-29 18:15:55] [PARTITION] [*] Partição [1/154]: João Pessoa (Geral) - Até R$ 250k
+[2026-07-29 18:16:03] [PARTITION_RESULT]    [+] Partição 'João Pessoa (Geral) - Até R$ 250k' concluída: 1 págs | 2 novos links | 2 totais
+[2026-07-29 18:16:13] [PARTITION] [*] Partição [2/154]: João Pessoa (Geral) - R$ 250k a R$ 400k
+[2026-07-29 18:20:06] [PARTITION_RESULT]    [+] Partição 'João Pessoa (Geral) - R$ 250k a R$ 400k' concluída: 100 págs | 945 novos links | 965 totais
+[2026-07-29 18:24:34] [CHECKPOINT]   [CHECKPOINT #1] +49 imóveis salvos. Base total: 456
+[2026-07-29 18:27:36] [RECYCLE]   [♻ CONTEXT RECYCLE #1] Ciclo periódico (80 reqs)
+[2026-07-29 18:29:51] [CHECKPOINT]   [CHECKPOINT #2] +50 imóveis salvos. Base total: 506
+[2026-07-29 18:35:00] [CHECKPOINT]   [CHECKPOINT #3] +50 imóveis salvos. Base total: 556
+[2026-07-29 18:35:43] [RECYCLE]   [♻ CONTEXT RECYCLE #2] Ciclo periódico (80 reqs)
+[2026-07-29 18:39:54] [CHECKPOINT]   [CHECKPOINT #4] +50 imóveis salvos. Base total: 606
+[2026-07-29 18:44:11] [RECYCLE]   [♻ CONTEXT RECYCLE #3] Ciclo periódico (80 reqs)

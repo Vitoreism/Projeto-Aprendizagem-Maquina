@@ -1,6 +1,6 @@
 import os
 import json
-from typing import List, Dict, Any, Set
+from typing import List, Dict, Any, Set, Optional
 
 try:
     from .config import ARQUIVO_SAIDA
@@ -20,21 +20,62 @@ class StorageManager:
         self._load_existing_data()
 
     def _load_existing_data(self) -> None:
-        """Carrega os dados existentes para popular os índices de deduplicação."""
+        """Carrega os dados existentes para popular os índices de deduplicação e reparar títulos nulos."""
         if os.path.exists(self.file_path):
             try:
                 with open(self.file_path, 'r', encoding='utf-8') as f:
                     records = json.load(f)
-                    for item in records:
-                        if isinstance(item, dict):
-                            url = item.get('url_anuncio')
-                            code = item.get('codigo_imovel')
-                            if url:
-                                self.collected_urls.add(url.strip())
-                            if code:
-                                self.collected_codes.add(str(code).strip())
+
+                valid_records = []
+                modified = False
+
+                for item in records:
+                    if isinstance(item, dict):
+                        url = item.get('url_anuncio')
+                        code = item.get('codigo_imovel')
+
+                        # Se o registro não tem preço, endereço E anunciante, é um registro corrompido/vazio
+                        is_empty_record = (
+                            item.get('preco_venda') is None and
+                            item.get('endereco_completo') is None and
+                            item.get('anunciante') is None
+                        )
+
+                        if is_empty_record:
+                            modified = True
+                            continue  # Ignora este registro corrompido para que seja raspado novamente
+
+                        if url:
+                            self.collected_urls.add(url.strip())
+                        if code:
+                            self.collected_codes.add(str(code).strip())
+
+                        # Repara títulos nulos ou 'Sem título' usando o slug da URL
+                        if not item.get('titulo') or item.get('titulo') == 'Sem título':
+                            item['titulo'] = self._generate_title_from_url(url)
+                            modified = True
+
+                        valid_records.append(item)
+
+                if modified:
+                    with open(self.file_path, 'w', encoding='utf-8') as f:
+                        json.dump(valid_records, f, ensure_ascii=False, indent=4)
+                    print(f"  [+] Base purgada e corrigida: {len(valid_records)} registros válidos mantidos.")
             except (json.JSONDecodeError, OSError) as e:
                 print(f"  [!] Alerta ao carregar arquivo de saída existente: {e}")
+
+    @staticmethod
+    def _generate_title_from_url(url: Optional[str]) -> str:
+        if not url:
+            return "Imóvel Zap Imóveis"
+        import re
+        match = re.search(r'/imovel/([^/?]+)', url)
+        if match:
+            slug = match.group(1)
+            slug_clean = re.sub(r'-id-\d+$', '', slug)
+            words = [w.capitalize() for w in slug_clean.split('-') if w]
+            return " ".join(words)
+        return "Imóvel Zap Imóveis"
 
     def is_already_collected(self, url: str, code: str = None) -> bool:
         """Verifica se uma URL ou código de imóvel já foi coletado previamente."""

@@ -27,9 +27,8 @@ class PropertyExtractor:
         try:
             soup = BeautifulSoup(html_content, 'html.parser')
 
-            # Título
-            h1 = soup.find('h1')
-            dados['titulo'] = h1.get_text(strip=True) if h1 else None
+            # Título com fallbacks robustos (H1, meta tag, ou URL slug)
+            dados['titulo'] = self._extract_title(soup, url)
 
             # Endereço e Bairro
             self._extract_address(soup, dados)
@@ -46,13 +45,19 @@ class PropertyExtractor:
             # Comodidades
             self._extract_features(soup, dados)
 
-            # Descrição Completa
-            dados['descricao_completa'] = self._extract_description(soup)
+            # Validação de Qualidade Mínima:
+            # Se não extraiu pelo menos preço, endereço ou título válido, considera a extração falha.
+            tem_dados_validos = any([
+                dados.get('preco_venda'),
+                dados.get('endereco_completo'),
+                dados.get('bairro'),
+                dados.get('titulo') and dados.get('titulo') != "Imóvel Zap Imóveis"
+            ])
 
-            return dados
+            return dados if tem_dados_validos else None
         except Exception as e:
             print(f"  [!] Exceção prevenida no extrator de HTML ({url}): {e}")
-            return dados if dados.get('url_anuncio') else None
+            return None
 
     def _extract_prices(self, soup: BeautifulSoup, dados: Dict[str, Any]) -> None:
         try:
@@ -161,3 +166,31 @@ class PropertyExtractor:
             return desc_tag.get_text(separator='\n', strip=True) if desc_tag else 'Descrição não encontrada.'
         except Exception:
             return 'Descrição não encontrada.'
+
+    def _extract_title(self, soup: BeautifulSoup, url: str) -> str:
+        """Extrai o título com seletores hierárquicos e fallback pela URL."""
+        try:
+            # 1. H1 ou Seletores CSS específicos do Zap Imóveis
+            h1 = soup.find('h1') or soup.select_one("[data-testid='title'], h1[class*='title'], [class*='listing-title']")
+            if h1 and h1.get_text(strip=True):
+                return h1.get_text(strip=True)
+
+            # 2. Meta Tag Open Graph (og:title)
+            og_title = soup.find('meta', property='og:title') or soup.find('meta', attrs={'name': 'title'})
+            if og_title and og_title.get('content'):
+                title_content = og_title['content'].split('|')[0].strip()
+                if title_content and len(title_content) > 5:
+                    return title_content
+
+            # 3. Fallback: Parse da URL (slug)
+            if url:
+                match = re.search(r'/imovel/([^/?]+)', url)
+                if match:
+                    slug = match.group(1)
+                    slug_clean = re.sub(r'-id-\d+$', '', slug)
+                    words = [w.capitalize() for w in slug_clean.split('-') if w]
+                    return " ".join(words)
+        except Exception:
+            pass
+
+        return "Imóvel Zap Imóveis"

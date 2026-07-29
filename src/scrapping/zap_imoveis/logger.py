@@ -33,6 +33,9 @@ class LoggerManager:
             "sucesso_extracao": 0,
             "falhas_extracao": 0,
             "checkpoints_salvos": 0,
+            "reciclagens_contexto": 0,
+            "desafios_anti_bot": 0,
+            "retentativas_sucesso": 0,
             "particoes_detalhes": []
         }
         
@@ -106,6 +109,22 @@ class LoggerManager:
         self.metrics["checkpoints_salvos"] += 1
         msg = f"  [CHECKPOINT #{self.metrics['checkpoints_salvos']}] +{saved_batch_count} imóveis salvos. Base total: {total_accumulated}"
         self.log(msg, level="CHECKPOINT")
+
+    def log_context_recycle(self, reason: str = "Rotina Periódica"):
+        """Registra a reciclagem do contexto do Playwright."""
+        self.metrics["reciclagens_contexto"] += 1
+        msg = f"  [♻ CONTEXT RECYCLE #{self.metrics['reciclagens_contexto']}] {reason}"
+        self.log(msg, level="RECYCLE")
+
+    def log_resilience_event(self, event_type: str, details: str):
+        """Registra evento de mitigação anti-bot, backoff ou retentativa."""
+        if "desafio" in event_type.lower() or "cloudflare" in event_type.lower():
+            self.metrics["desafios_anti_bot"] += 1
+        elif "retentativa sucesso" in event_type.lower():
+            self.metrics["retentativas_sucesso"] += 1
+            
+        msg = f"  [🛡 RESILIÊNCIA - {event_type.upper()}] {details}"
+        self.log(msg, level="RESILIENCE")
 
     def generate_final_report(self) -> Dict[str, Any]:
         """Gera e salva o relatório estruturado de finalização (execution_report.json)."""

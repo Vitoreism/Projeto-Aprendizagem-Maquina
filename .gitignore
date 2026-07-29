@@ -1,3 +1,5 @@
 .venv
 *.csv
 *.json
+*.log
+__pycache__

@@ -5,13 +5,22 @@ import sys
 DIR_ATUAL = os.path.dirname(os.path.abspath(__file__))
 ARQUIVO_SAIDA = os.path.join(DIR_ATUAL, "imoveis_joao_pessoa_zap.json")
 PAUSE_FLAG_FILE = os.path.join(DIR_ATUAL, "pause.flag")
+STORAGE_STATE_FILE = os.path.join(DIR_ATUAL, "session_state.json")
 
-# Configurações do Scraper
+# Configurações de Resiliência e Ciclo de Vida do Browser
+CONTEXT_RECYCLE_EVERY = 80          # Recicla o contexto Playwright a cada N requisições
+MAX_RETRIES_PER_URL = 2             # Tentativas de retentativa para URLs bloqueadas
+SLIDING_WINDOW_SIZE = 20            # Janela de monitoramento da taxa de bloqueio
+BLOCK_RATE_THRESHOLD = 0.15         # Limiar de erro para acionar cadência lentificada (15%)
+
+# Configurações do Scraper e Delays Humanizados
 BASE_LISTAGEM_URL = "https://www.zapimoveis.com.br/venda/apartamentos/pb+joao-pessoa/"
 TAMANHO_LOTE = 50
 TIMEOUT_NAVEGACAO_MS = 45000
-PAUSA_ENTRE_PAGINAS_SEC = (1.2, 2.2)
-PAUSA_ENTRE_IMOVEIS_SEC = (1.0, 2.0)
+PAUSA_ENTRE_PAGINAS_SEC = (2.5, 4.5)
+PAUSA_ENTRE_IMOVEIS_SEC = (2.0, 4.5)
+INTERVALO_PAUSA_LONGA_IMOVEIS = (8, 15)  # A cada N imóveis, faz uma pausa humana maior
+PAUSA_LONGA_DURACAO_SEC = (7.0, 14.0)   # Duração da pausa de leitura humana
 
 # Anti-Bot & Network Headers
 USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'
