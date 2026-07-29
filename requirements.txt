@@ -1,0 +1,12 @@
+pandas
+
+# Scraping
+beautifulsoup4
+playwright
+requests
+nest_asyncio
+lxml
+
+# Análise e Modelagem
+numpy
+scikit-learn

@@ -1,0 +1,26 @@
+
+=======================================================
+SESSÃO DE RASPAGEM INICIADA EM: 2026-07-29 17:05:02
+=======================================================
+
+=======================================================
+SESSÃO DE RASPAGEM INICIADA EM: 2026-07-29 17:05:19
+=======================================================
+[2026-07-29 17:05:19] [PHASE] 
+[FASE: TESTE] Testando sistema de logging e relatorios
+[2026-07-29 17:05:19] [PARTITION] [*] Partição [1/154]: Bessa - Ate 250k
+[2026-07-29 17:05:19] [PARTITION_RESULT]    [+] Partição 'Bessa - Ate 250k' concluída: 5 págs | 19 novos links | 100 totais
+[2026-07-29 17:05:19] [CHECKPOINT]   [CHECKPOINT #1] +10 imóveis salvos. Base total: 168
+[2026-07-29 17:05:19] [REPORT] 
+=======================================================
+[RELATÓRIO FINAL DE EXECUÇÃO E OBSERVABILIDADE]
+=======================================================
+Duração Total          : 0:00:00
+Partições Processadas   : 1
+Links Novos Coletados   : 19
+Sucessos de Extração    : 1
+Falhas de Extração     : 0
+Checkpoints Efetuados   : 1
+Arquivo de Log Completo : C:\Users\Administrator\Desktop\Universidade\projeto_ml\src\scrapping\zap_imoveis\scraping.log
+Relatório Estruturado  : C:\Users\Administrator\Desktop\Universidade\projeto_ml\src\scrapping\zap_imoveis\execution_report.json
+=======================================================
