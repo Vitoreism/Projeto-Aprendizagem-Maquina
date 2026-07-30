@@ -30,3 +30,7 @@ scrape*.log
 .idea/
 Thumbs.db
 desktop.ini
+
+# credenciais e variáveis de ambiente
+.env
+.env.*
