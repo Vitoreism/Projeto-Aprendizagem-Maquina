@@ -1,16 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Modulo de Processamento de Linguagem Natural (PLN) via LLM (Groq API).
-
-Implementacao oficial da Issue #9:
-Extracao de caracteristicas adicionais a partir do texto livre da 'descricao_completa'
-dos imoveis no dataset do projeto (apartamentos a venda em Joao Pessoa - PB).
-
-Principais Funcionalidades:
-1. Definicao do Prompt de Extracao Estruturada em JSON Schema (Pydantic / Dict).
-2. Pipeline de Processamento em Lote com Retry e Exponential Backoff contra HTTP 429 (Rate Limit).
-3. Persistência Incremental e Atomica em 'data/interim/extractions_llm.json' (Resumivel).
-4. Normalizacao dos Atributos Extraidos para o Dataset Processado Final ('data/processed/').
-"""
+"""Processamento de linguagem natural (PLN) via LLM (Groq API) para a Issue #9."""
 
 from __future__ import annotations
 
@@ -26,12 +15,10 @@ from typing import Any, Dict, List, Optional
 from dotenv import load_dotenv
 from imoveis_jp import config
 
-# Carrega variaveis de ambiente do arquivo .env
 load_dotenv()
 
-# Schema das caracteristicas extraidas da descricao livre do imovel
 SYSTEM_PROMPT = """Voce e um especialista em analise de dados imobiliarios em Joao Pessoa (PB).
-Sua tarefa e analisar o texto da descricao completa de um anuncio de imovel e extrair atributos relevantes.
+Sua tarefa e analisar o texto da descricao completa de um anuncio de imovel e extrairatributos relevantes.
 
 Responda ESTRITAMENTE com um objeto JSON valido (sem textos explicativos ou marcacoes markdown antes/depois).
 O JSON DEVE conter exatamente as seguintes chaves:
@@ -72,10 +59,6 @@ def extrair_atributos_llm(
     model: str = "llama-3.1-8b-instant",
     max_retries: int = 5,
 ) -> Optional[Dict[str, Any]]:
-    """Envia a descricao para a API do Groq e retorna os atributos extraidos em dict.
-
-    Implementa estrategia de Exponential Backoff com Jitter para lidar com HTTP 429 (Rate Limit).
-    """
     if not descricao or len(descricao.strip()) < 10 or descricao == "Descrição não encontrada.":
         return _retornar_atributos_padrao()
 
@@ -101,7 +84,6 @@ def extrair_atributos_llm(
         except Exception as e:
             erro_str = str(e).lower()
             if "429" in erro_str or "rate limit" in erro_str or "too many requests" in erro_str:
-                # Exponential backoff com Jitter aleatorio
                 sleep_time = (base_delay * (2 ** attempt)) + random.uniform(0.5, 1.5)
                 print(f"[Rate Limit HTTP 429] Tentativa {attempt + 1}/{max_retries}. Aguardando {sleep_time:.1f}s...")
                 time.sleep(sleep_time)
@@ -114,7 +96,6 @@ def extrair_atributos_llm(
 
 
 def _validar_e_sanitizar_resposta(dados: Dict[str, Any]) -> Dict[str, Any]:
-    """Garante que todas as chaves esperadas estejam presentes e sanitizadas."""
     padrao = _retornar_atributos_padrao()
     for chave in padrao:
         if chave in dados:
@@ -134,7 +115,6 @@ def _validar_e_sanitizar_resposta(dados: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def _retornar_atributos_padrao() -> Dict[str, Any]:
-    """Retorna o esquema padrao com valores default (False / Nao informado)."""
     return {
         "posicao_solar": "Nao informado",
         "vista_mar": False,
@@ -152,7 +132,6 @@ def _retornar_atributos_padrao() -> Dict[str, Any]:
 
 
 def carregar_extracoes_existentes(caminho: Path) -> Dict[str, Dict[str, Any]]:
-    """Carrega o checkpoint incremental de extracoes em data/interim/extractions_llm.json."""
     if caminho.exists():
         try:
             with open(caminho, "r", encoding="utf-8") as f:
@@ -163,7 +142,6 @@ def carregar_extracoes_existentes(caminho: Path) -> Dict[str, Dict[str, Any]]:
 
 
 def salvar_extracoes_checkpoint(caminho: Path, dados: Dict[str, Dict[str, Any]]) -> None:
-    """Escreve atomica e seguramente o arquivo de checkpoint."""
     caminho.parent.mkdir(parents=True, exist_ok=True)
     temp_file = caminho.with_suffix(".tmp")
     with open(temp_file, "w", encoding="utf-8") as f:
@@ -177,7 +155,6 @@ def executar_pipeline_extracao_llm(
     sleep_between: float = 1.2,
     dry_run: bool = False,
 ) -> None:
-    """Executa o pipeline completo de extracao via Groq LLM com suporte a interrupcao/retomada."""
     config.ensure_dirs()
     input_file = config.ANUNCIOS_JSON
     checkpoint_file = config.EXTRACTIONS_JSON
@@ -200,7 +177,6 @@ def executar_pipeline_extracao_llm(
         print("[DRY-RUN] Modo --dry-run ativado. Nenhuma chamada de API sera realizada.")
         return
 
-    # Inicializa cliente Groq
     api_key = os.environ.get("GROQ_API_KEY")
     if not api_key:
         print("[Erro] GROQ_API_KEY nao foi encontrada nas variaveis de ambiente nem no arquivo .env.")
@@ -227,7 +203,7 @@ def executar_pipeline_extracao_llm(
                 continue
 
             if url in extracoes:
-                continue  # Pula o que ja foi extraido em checkpoints anteriores
+                continue
 
             descricao = imovel.get("descricao_completa", "")
             print(f"[{i + 1}/{total_escopo}] Extraindo LLM para: {url[-45:]}...", end=" ")
@@ -245,12 +221,10 @@ def executar_pipeline_extracao_llm(
             else:
                 print("Pulado (falha).")
 
-            # Checkpoint a cada 10 novos itens processados
             if processados_nesta_sessao % 10 == 0 and processados_nesta_sessao > 0:
                 salvar_extracoes_checkpoint(checkpoint_file, extracoes)
                 print(f"[Checkpoint Salvo] Total registrado: {len(extracoes)} imoveis.")
 
-            # Pausa para respeitar Rate Limit (30 RPM = 2.0s por req)
             time.sleep(sleep_between)
 
     except KeyboardInterrupt:
@@ -261,10 +235,6 @@ def executar_pipeline_extracao_llm(
 
 
 def fundir_extracoes_nos_csvs_processados() -> None:
-    """Le as extracoes do LLM em data/interim/extractions_llm.json e integra no dataset final.
-
-    Atualiza/Gera os CSVs em data/processed/ (properties.csv, amenities.csv, rel_amenities.csv).
-    """
     import pandas as pd
 
     checkpoint_file = config.EXTRACTIONS_JSON
@@ -291,7 +261,6 @@ def fundir_extracoes_nos_csvs_processados() -> None:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    """Configura os argumentos de linha de comando (CLI)."""
     parser = argparse.ArgumentParser(
         description="Extrai caracteristicas estruturadas da descricao dos imoveis usando Groq LLM (Issue #9)."
     )
