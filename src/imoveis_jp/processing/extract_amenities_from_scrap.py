@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
-Processa as comodidades brutas (área privativa e comum) extraídas do HTML
-e converte em colunas binárias (0 ou 1) via pandas/one-hot encoding.
+processa as comodidades brutas (area privativa e comum) extraidas do html
+e converte em colunas binarias (0 ou 1) via pandas/one-hot encoding
 """
 
 from __future__ import annotations

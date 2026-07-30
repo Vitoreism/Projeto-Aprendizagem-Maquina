@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
-Módulo de integração com a API do Groq para extração de atributos
-em texto livre da descrição completa dos imóveis (Issue #9).
+modulo de integracao com a api do groq para extracao de atributos
+em texto livre da descricao completa dos imoveis (issue #9)
 """
 
 from __future__ import annotations
@@ -21,7 +21,7 @@ from imoveis_jp import config
 # le as credenciais salvas no .env
 load_dotenv()
 
-# prompt e schema json enviado para a LLM
+# prompt e schema json enviado para a llm
 SYSTEM_PROMPT = """Voce e um especialista em analise de dados imobiliarios em Joao Pessoa (PB).
 Sua tarefa e analisar o texto da descricao completa de um anuncio de imovel e extrair atributos relevantes.
 
@@ -64,7 +64,7 @@ def extrair_atributos_llm(
     model: str = "llama-3.1-8b-instant",
     max_retries: int = 5,
 ) -> Optional[Dict[str, Any]]:
-    # se a descricao for muito curta ou nula, nao gasta cota de API
+    # se a descricao for muito curta ou nula, nao gasta cota de api
     if not descricao or len(descricao.strip()) < 10 or descricao == "Descrição não encontrada.":
         return _retornar_atributos_padrao()
 
