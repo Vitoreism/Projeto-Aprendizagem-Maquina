@@ -1,5 +1,8 @@
 # -*- coding: utf-8 -*-
-"""Extração de comodidades a partir dos dados brutos do scrape."""
+"""
+Processa as comodidades brutas (área privativa e comum) extraídas do HTML
+e converte em colunas binárias (0 ou 1) via pandas/one-hot encoding.
+"""
 
 from __future__ import annotations
 
@@ -16,6 +19,7 @@ from imoveis_jp import config
 
 
 def normalizar_texto(texto: str) -> str:
+    # remove acentos, pontuacao e converte espacos para underline
     if not texto:
         return ""
     texto_sem_acento = unicodedata.normalize("NFD", texto)
@@ -27,6 +31,7 @@ def normalizar_texto(texto: str) -> str:
 
 
 def mapear_sinonimos(nome_comodidade: str) -> str:
+    # agrupa variações equivalentes para evitar colunas repetidas no dataset
     if "churrasqueira" in nome_comodidade:
         return "churrasqueira"
     if "portaria" in nome_comodidade or "seguranca" in nome_comodidade:
@@ -49,13 +54,14 @@ def extrair_matriz_comodidades_html(
     input_file = config.ANUNCIOS_JSON
 
     if not input_file.exists():
-        print(f"[Erro] Arquivo de entrada '{input_file}' nao encontrado.")
+        print(f"[Erro] Arquivo '{input_file}' nao encontrado.")
         sys.exit(1)
 
     print(f"[Info] Lendo anuncios brutos de: {input_file}...")
     with open(input_file, "r", encoding="utf-8") as f:
         imoveis = json.load(f)
 
+    # conta a frequencia de cada comodidade em todo o dataset
     contador_comodidades: Counter = Counter()
     registros_imoveis: List[Dict[str, Any]] = []
 
@@ -66,6 +72,7 @@ def extrair_matriz_comodidades_html(
 
         comodidades_imovel: Set[str] = set()
 
+        # junta comodidades da area privativa e comum
         privativa = item.get("comodidades_area_privativa")
         if privativa and isinstance(privativa, str):
             for termo in privativa.split(","):
@@ -88,14 +95,16 @@ def extrair_matriz_comodidades_html(
             "comodidades_set": comodidades_imovel
         })
 
+    # filtra apenas comodidades com frequencia relevante
     comodidades_relevantes = [
         com for com, count in contador_comodidades.most_common()
         if count >= frequencia_minima
     ]
 
-    print(f"[Info] Total de comodidades unicas identificadas: {len(contador_comodidades)}")
-    print(f"[Info] Comodidades selecionadas (frequencia >= {frequencia_minima}): {len(comodidades_relevantes)}")
+    print(f"[Info] Total de comodidades unicas encontradas: {len(contador_comodidades)}")
+    print(f"[Info] Comodidades selecionadas (aparecem em >= {frequencia_minima} imoveis): {len(comodidades_relevantes)}")
 
+    # gera as colunas binarias 0 ou 1 para cada imovel (one-hot encoding)
     linhas_dataset: List[Dict[str, Any]] = []
 
     for reg in registros_imoveis:
@@ -112,6 +121,7 @@ def extrair_matriz_comodidades_html(
 
 
 def exportar_comodidades_csv() -> None:
+    # salva o dataframe processado no interim
     df_comodidades, contador = extrair_matriz_comodidades_html(frequencia_minima=20)
 
     output_csv = config.INTERIM / "amenities_scraped_normalized.csv"
@@ -124,7 +134,7 @@ def exportar_comodidades_csv() -> None:
     print(f"Total de imoveis processados: {len(df_comodidades):,}")
     print(f"Total de colunas binarias criadas: {len(df_comodidades.columns) - 1}")
     print("-" * 65)
-    print("TOP 15 COMODIDADES MAIS FREQUENTES EXTRAIDAS DO SCRAPE:")
+    print("TOP 15 COMODIDADES MAIS FREQUENTES:")
     for com, count in contador.most_common(15):
         print(f"  - {com:30s}: {count:,} imoveis ({(count/len(df_comodidades))*100:.1f}%)")
     print("=" * 65)

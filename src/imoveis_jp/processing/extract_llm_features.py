@@ -1,5 +1,8 @@
 # -*- coding: utf-8 -*-
-"""Processamento de linguagem natural (PLN) via LLM (Groq API) para a Issue #9."""
+"""
+Módulo de integração com a API do Groq para extração de atributos
+em texto livre da descrição completa dos imóveis (Issue #9).
+"""
 
 from __future__ import annotations
 
@@ -15,10 +18,12 @@ from typing import Any, Dict, List, Optional
 from dotenv import load_dotenv
 from imoveis_jp import config
 
+# le as credenciais salvas no .env
 load_dotenv()
 
+# prompt e schema json enviado para a LLM
 SYSTEM_PROMPT = """Voce e um especialista em analise de dados imobiliarios em Joao Pessoa (PB).
-Sua tarefa e analisar o texto da descricao completa de um anuncio de imovel e extrairatributos relevantes.
+Sua tarefa e analisar o texto da descricao completa de um anuncio de imovel e extrair atributos relevantes.
 
 Responda ESTRITAMENTE com um objeto JSON valido (sem textos explicativos ou marcacoes markdown antes/depois).
 O JSON DEVE conter exatamente as seguintes chaves:
@@ -59,6 +64,7 @@ def extrair_atributos_llm(
     model: str = "llama-3.1-8b-instant",
     max_retries: int = 5,
 ) -> Optional[Dict[str, Any]]:
+    # se a descricao for muito curta ou nula, nao gasta cota de API
     if not descricao or len(descricao.strip()) < 10 or descricao == "Descrição não encontrada.":
         return _retornar_atributos_padrao()
 
@@ -83,6 +89,7 @@ def extrair_atributos_llm(
 
         except Exception as e:
             erro_str = str(e).lower()
+            # trata estouro de cota (429) com exponential backoff + jitter
             if "429" in erro_str or "rate limit" in erro_str or "too many requests" in erro_str:
                 sleep_time = (base_delay * (2 ** attempt)) + random.uniform(0.5, 1.5)
                 print(f"[Rate Limit HTTP 429] Tentativa {attempt + 1}/{max_retries}. Aguardando {sleep_time:.1f}s...")
@@ -96,6 +103,7 @@ def extrair_atributos_llm(
 
 
 def _validar_e_sanitizar_resposta(dados: Dict[str, Any]) -> Dict[str, Any]:
+    # garante que o json retornado contem exatamente as chaves e tipos esperados
     padrao = _retornar_atributos_padrao()
     for chave in padrao:
         if chave in dados:
@@ -115,6 +123,7 @@ def _validar_e_sanitizar_resposta(dados: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def _retornar_atributos_padrao() -> Dict[str, Any]:
+    # dicionario com valores default em caso de falha ou ausencia
     return {
         "posicao_solar": "Nao informado",
         "vista_mar": False,
@@ -132,6 +141,7 @@ def _retornar_atributos_padrao() -> Dict[str, Any]:
 
 
 def carregar_extracoes_existentes(caminho: Path) -> Dict[str, Dict[str, Any]]:
+    # le o arquivo de checkpoint salvo em data/interim/
     if caminho.exists():
         try:
             with open(caminho, "r", encoding="utf-8") as f:
@@ -142,6 +152,7 @@ def carregar_extracoes_existentes(caminho: Path) -> Dict[str, Dict[str, Any]]:
 
 
 def salvar_extracoes_checkpoint(caminho: Path, dados: Dict[str, Dict[str, Any]]) -> None:
+    # gravacao atomica em arquivo temporario para nao corromper o json se o processo for interrompido
     caminho.parent.mkdir(parents=True, exist_ok=True)
     temp_file = caminho.with_suffix(".tmp")
     with open(temp_file, "w", encoding="utf-8") as f:
@@ -202,6 +213,7 @@ def executar_pipeline_extracao_llm(
             if not url:
                 continue
 
+            # pula o que ja foi processado anteriormente
             if url in extracoes:
                 continue
 
@@ -221,6 +233,7 @@ def executar_pipeline_extracao_llm(
             else:
                 print("Pulado (falha).")
 
+            # salva o checkpoint no disco a cada 10 novos itens
             if processados_nesta_sessao % 10 == 0 and processados_nesta_sessao > 0:
                 salvar_extracoes_checkpoint(checkpoint_file, extracoes)
                 print(f"[Checkpoint Salvo] Total registrado: {len(extracoes)} imoveis.")
@@ -235,6 +248,7 @@ def executar_pipeline_extracao_llm(
 
 
 def fundir_extracoes_nos_csvs_processados() -> None:
+    # le o json de extracoes salvas e converte em dataframe tabular csv
     import pandas as pd
 
     checkpoint_file = config.EXTRACTIONS_JSON
