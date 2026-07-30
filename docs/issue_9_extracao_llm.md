@@ -1,4 +1,4 @@
-# Documentação Técnica e Acadêmica da Issue #9: Extração de Características em Texto Livre via LLM (Groq API)
+# Documentação Técnica e Acadêmica da Issue #9: infraestrutura de Extração de Texto Livre via LLM (Groq API)
 
 **Autor:** Gabriel Ribeiro (`@gabrielbribeiroo`)  
 **Projeto:** Previsão e Análise de Preços de Imóveis em João Pessoa (PB)  
@@ -8,115 +8,75 @@
 
 ---
 
-## 1. Introdução e Formulação do Problema
+## 1. Introdução e Propósito do Módulo
 
-Na mineração de dados imobiliários a partir de portais da web, a extração tradicional baseada em raspagem HTML (DOM Parsing) recupera com facilidade atributos tabulares padronizados (como número de quartos, banheiros, vagas de garagem e área útil). 
+A **Issue #9** tem como propósito criar a infraestrutura robusta, resiliente e extensível de **Processamento de Linguagem Natural (PLN) baseada em LLMs (Large Language Models)** para extrair atributos do texto livre do campo `descricao_completa` dos imóveis.
 
-Contudo, uma parcela significativa do valor do imóvel é determinada por **atributos qualitativos que aparecem exclusivamente no texto livre da descrição completa** fornecida pelo anunciante. Exemplos clássicos no mercado imobiliário de João Pessoa incluem:
-- **Orientação solar:** Posição Nascente (mais valorizada por evitar o calor da tarde no litoral), Poente, Sul ou Norte.
-- **Localização em relação ao mar:** Beira-mar / Pé na areia, ou Vista definitiva para o mar.
-- **Nível de acabamento:** Piso em porcelanato, móveis projetados / armários planejados.
-- **Tipo de pavimento:** Andar alto vs. andar baixo / Cobertura.
-- **Condições comerciais:** Aceita permuta, apto para financiamento bancário.
-
-Para transformar esses dados não estruturados em variáveis numéricas e booleanas utilizáveis em modelos de Aprendizagem de Máquina (Regressão, Random Forest, XGBoost), foi desenvolvido o pipeline de **Processamento de Linguagem Natural (PLN) guiado por LLMs (Large Language Models)**.
+Nesta etapa, o foco principal é a **construção da arquitetura técnica**, **estimativa precisa de tokens/custos**, **controle de taxas de requisição (*Rate Limits*)** e **salvamento incremental em lote**, permitindo que a equipe posteriormente defina ou ajuste o schema de atributos desejado sem precisar reconstruir o pipeline.
 
 ---
 
-## 2. Requisito 1: Especificação do JSON Schema e Prompt do Sistema
+## 2. Estimativa Científica de Tokens e Custos (Requisito da Issue #9)
 
-Para garantir que a LLM retorne estritamente respostas estruturadas e previsíveis (sem alucinações ou marcações de texto livre), o pipeline utiliza o parâmetro `response_format={"type": "json_object"}` e um **System Prompt com Schema rígido**.
+Foi realizado um estudo estatístico detalhado sobre o corpus de descrições dos anúncios (`data/raw/imoveis_joao_pessoa.json`):
 
-### 📋 Tabela de Atributos Extraídos
+### 📊 2.1 Estatísticas do Dataset
+* **Total de imóveis cadastrados:** `10.758` anúncios
+* **Imóveis com descrição válida:** `10.751` anúncios (99.9%)
+* **Média de caracteres por descrição:** `743.8` caracteres
+* **Maior descrição:** `4.667` caracteres
+* **Volume total de caracteres:** `7.996.962` caracteres (~8 milhões de caracteres)
 
-| Chave JSON | Tipo | Valores Válidos | Descrição / Regra de Extração |
-| :--- | :--- | :--- | :--- |
-| `posicao_solar` | `string` | `"Nascente"`, `"Poente"`, `"Sul"`, `"Norte"`, `"Nao informado"` | Posição do sol. Deve ser extraída apenas se citada explicitamente. |
-| `vista_mar` | `boolean` | `true` / `false` | `true` se mencionar vista para o mar, vista mar ou vista definitiva. |
-| `beira_mar` | `boolean` | `true` / `false` | `true` se for localizado na avenida beira-mar ou pé na areia. |
-| `varanda_gourmet` | `boolean` | `true` / `false` | `true` se possuir varanda/sacada/terraço gourmet. |
-| `piso_porcelanato` | `boolean` | `true` / `false` | `true` se o acabamento incluir piso em porcelanato. |
-| `moveis_projetados` | `boolean` | `true` / `false` | `true` se incluir armários embutidos, móveis planejados ou projetados. |
-| `andar_alto` | `boolean` | `true` / `false` | `true` se mencionar andar alto, cobertura ou últimos pavimentos. |
-| `reformado` | `boolean` | `true` / `false` | `true` se for imóvel reformado, atualizado ou recém-construído/novo. |
-| `aceita_permuta` | `boolean` | `true` / `false` | `true` se mencionar aceite de troca, permuta ou veículos no negócio. |
-| `aceita_financiamento` | `boolean` | `true` / `false` | `true` se a documentação estiver apta para financiamento bancário. |
-| `ar_condicionado` | `boolean` | `true` / `false` | `true` se possuir ar condicionado, split ou infraestrutura para tal. |
-| `area_lazer_privativa` | `boolean` | `true` / `false` | `true` se possuir piscina privativa, churrasqueira privativa ou área de lazer do apartamento. |
+### 🔢 2.2 Estimativa de Tokens
+Usando a taxa de conversão para o português (~1 token = 3.7 caracteres):
+* **Tokens das descrições brutas:** ~`2.161.341` tokens
+* **Tokens de instruções do prompt (System + User):** ~`1.612.650` tokens (150 tokens/imóvel)
+* **Tokens de saída estruturada (JSON):** ~`860.080` tokens (80 tokens/imóvel)
+* **TOTAL ESTIMADO DE TOKENS DO PROJETO:** **~`4.634.071` tokens** (~4.63 milhões)
+
+### ⚡ 2.3 Análise de Cotas e Custo (Groq Free Tier)
+- **Modelo de referência:** `llama-3.1-8b-instant`
+- **Custo financeiro:** **R$ 0,00** (Gratuito no Groq Cloud)
+- **Cota Diária (TPD):** 500.000 tokens / dia
+- **Cota de Requisições (RPD):** 14.400 requisições / dia (~30 RPM)
+- **Tempo estimado de execução total:** ~7.5 dias no limite diário gratuito (ou ~2.5 dias se agrupado em batches).
 
 ---
 
-## 3. Requisito 2: Arquitetura do Pipeline em Lote (Rate Limits, Backoff & Checkpoints)
+## 3. Arquitetura do Pipeline Técnico
 
-### 3.1 Tratamento de Erros e Exponential Backoff (HTTP 429)
-APIs de LLM em nuvem possuem limites rígidos de requisições por minuto (**RPM**) e tokens por minuto (**TPM**). Quando a cota temporária é atingida, a API retorna um erro `HTTP 429 Too Many Requests`.
-
-Para tratar esses cenários de forma resiliente e não interromper a execução, o módulo implementa o algoritmo de **Exponential Backoff com Jitter (Ruído Aleatório)**:
+### 3.1 Tratamento de Rate Limits (HTTP 429) & Exponential Backoff
+O pipeline trata flutuações e limites de requisições da API através do algoritmo de **Exponential Backoff com Jitter**:
 
 $$\Delta t_{\text{espera}} = \min\left(t_{\text{máx}}, t_{\text{base}} \times 2^{\text{tentativa}}\right) + \text{uniform}(0.5, 1.5)$$
 
-Onde:
-- $t_{\text{base}} = 2.0\text{s}$
-- $\text{tentativa} \in \{0, 1, 2, 3, 4\}$
-- O ruído aleatório ($\text{jitter}$) evita o efeito *thundering herd* se houver concorrência.
-
-### 3.2 Persistência Incremental e Salvamento Atômico de Checkpoints
-O processamento da base inteira (~10.758 imóveis) pode levar várias sessões devido à cota do plano gratuito do Groq.
-
+### 3.2 Persistência Incremental e Escrita Atômica
 - **Arquivo de Checkpoint:** `data/interim/extractions_llm.json`
-- **Idempotência:** Antes de chamar a API para um imóvel, o pipeline verifica se a `url_anuncio` já está cadastrada no dicionário de checkpoints. Se estiver, o item é pulado instantaneamente.
-- **Escrita Atômica:** A cada 10 novos itens processados, os dados são gravados primeiro em um arquivo temporário `extractions_llm.tmp` e renomeados de forma atômica (`replace()`), prevenindo a corrupção do JSON em caso de queda de energia ou interrupção pelo usuário (`Ctrl + C`).
+- **Resumível / Idempotente:** Pula automaticamente anúncios já processados em execuções anteriores.
+- **Escrita Atômica:** Garante a integridade do JSON mesmo em caso de interrupção abrupta do processo.
 
 ---
 
-## 4. Requisito 3: Integração e Normalização para o Dataset Final
+## 4. Guia de Execução e Reprodutibilidade
 
-Os resultados intermediários armazenados em `data/interim/extractions_llm.json` são convertidos em um DataFrame tabular limpo através da função `fundir_extracoes_nos_csvs_processados()`.
+Para rodar qualquer etapa no terminal na raiz do repositório:
 
-### Fluxo de Dados:
-```text
-data/raw/imoveis_joao_pessoa.json (Snapshots brutos)
-       │
-       ▼
-[Groq LLM Pipeline: extract_llm_features.py]
-       │
-       ▼
-data/interim/extractions_llm.json (Checkpoint JSON)
-       │
-       ▼
-data/interim/llm_features_normalized.csv (Dataset tabular normalizado)
-       │
-       ▼
-data/processed/properties.csv (Merge final para a modelagem ML)
-```
-
----
-
-## 5. Guia de Execução (Reprodutibilidade)
-
-Todos os comandos devem ser executados no terminal na raiz do repositório utilizando o ambiente virtual `.venv`:
-
-### 1. Teste de Validação em Modo Seco (sem gastar cota de API):
 ```powershell
+# 1. Estimativa automática de tokens e custos:
+.\.venv\Scripts\python.exe -m imoveis_jp.processing.estimate_llm_cost
+
+# 2. Execução em modo seco (Dry-Run / sem chamada de API):
 .\.venv\Scripts\python.exe -m imoveis_jp.processing.extract_llm_features --dry-run --limit 10
-```
 
-### 2. Teste de Extração com Amostra Reduzida (ex: 5 imóveis):
-```powershell
+# 3. Teste pontual com limite de N imóveis:
 .\.venv\Scripts\python.exe -m imoveis_jp.processing.extract_llm_features --limit 5
-```
 
-### 3. Execução Completa (Resumível):
-```powershell
-.\.venv\Scripts\python.exe -m imoveis_jp.processing.extract_llm_features
-```
-
-### 4. Normalização dos Resultados para CSV:
-```powershell
+# 4. Normalização para CSV intermediário:
 .\.venv\Scripts\python.exe -m imoveis_jp.processing.extract_llm_features --merge
 ```
 
-### 5. Reexecução do Cálculo de Estimativa de Tokens/Custos:
-```powershell
-.\.venv\Scripts\python.exe -m imoveis_jp.processing.estimate_llm_cost
-```
+---
+
+## 5. Próximos Passos (Alinhamento com a Equipe)
+
+Quando a equipe decidir no futuro quais atributos específicos deseja extrair da descrição livre para o modelo final, basta atualizar a constante `SYSTEM_PROMPT` e a validação do schema em `extract_llm_features.py` e reexecutar o pipeline.
