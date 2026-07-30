@@ -31,20 +31,20 @@ def normalizar_texto(texto: str) -> str:
 
 
 def mapear_sinonimos(nome_comodidade: str) -> str:
-    # mapeia e padroniza todos os sinonimos encontrados nas 284 comodidades brutas
+    # agrupa variais equivalentes para evitar colunas repetidas no dataset
     s = nome_comodidade
 
     if "churrasqueira" in s:
         return "churrasqueira"
     if "piscina" in s:
         return "piscina"
-    if "portaria" in s or "seguranca" in s or "guarita" in s or "camera" in s or "circuito" in s or "vigilancia" in s or "porteiro" in s or "portao" in s:
+    if "portaria" in s or "seguranca" in s or "guarita" in s or "camera" in s or "circuito" in s or "vigilancia" in s or "porteiro" in s or "portao" in s or "cerca" in s:
         return "portaria_seguranca_24h"
     if "elevador" in s:
         return "elevador"
     if "varanda" in s or "sacada" in s:
         return "varanda_gourmet" if "gourmet" in s else "varanda"
-    if "quadra" in s or "campo" in s or "squash" in s or "tenis" in s:
+    if "quadra" in s or "campo" in s or "squash" in s or "tenis" in s or "futebol" in s:
         return "quadra_esportiva"
     if "garagem" in s or "estacionamento" in s or "vaga" in s:
         return "vaga_garagem"
@@ -52,7 +52,7 @@ def mapear_sinonimos(nome_comodidade: str) -> str:
         return "permitido_pets"
     if "eletrico" in s or "eletrica" in s:
         return "carregador_carro_eletrico" if ("carro" in s or "veiculo" in s) else s
-    if "coworking" in s or "escritorio" in s or "workspace" in s or "reuniao" in s or "conves" in s:
+    if "coworking" in s or "escritorio" in s or "workspace" in s or "reuniao" in s or "convenc" in s:
         return "coworking_escritorio"
     if "academia" in s or "fitness" in s or "ginastica" in s or "pilates" in s:
         return "academia"
@@ -72,8 +72,32 @@ def mapear_sinonimos(nome_comodidade: str) -> str:
         return "vista_ou_acesso_praia"
     if "porcelanato" in s:
         return "piso_porcelanato"
-    if "cerâmica" in s or "ceramica" in s:
+    if "ceramica" in s:
         return "piso_ceramica"
+    if "cozinha" in s:
+        return "cozinha"
+    if "lavanderia" in s:
+        return "lavanderia"
+    if "gerador" in s:
+        return "gerador_de_energia"
+    if "hall" in s:
+        return "hall_de_entrada"
+    if "pne" in s or "acessibilidade" in s:
+        return "acessibilidade_pne"
+    if "ar_condicionado" in s or "climatizado" in s:
+        return "ar_condicionado"
+    if "gas" in s:
+        return "gas_canalizado"
+    if "pista" in s or "cooper" in s or "caminhada" in s or "trilha" in s:
+        return "pista_caminhada_cooper"
+    if "dependencia" in s or "funcionario" in s:
+        return "dependencia_empregados"
+    if "cinema" in s or "theater" in s or "video" in s:
+        return "cinema"
+    if "fechadura" in s:
+        return "fechadura_digital"
+    if "spa" in s or "hidro" in s or "jacuzzi" in s or "banheira" in s:
+        return "spa_hidromassagem"
 
     return s
 
@@ -132,7 +156,7 @@ def extrair_matriz_comodidades_html(
         if count >= frequencia_minima
     ]
 
-    print(f"[Info] Total de comodidades unicas encontradas (apos sinônimos): {len(contador_comodidades)}")
+    print(f"[Info] Total de comodidades unicas encontradas (apos sinonimos): {len(contador_comodidades)}")
     print(f"[Info] Comodidades selecionadas (aparecem em >= {frequencia_minima} imoveis): {len(comodidades_relevantes)}")
 
     # gera as colunas binarias 0 ou 1 para cada imovel (one-hot encoding)
@@ -165,7 +189,7 @@ def exportar_comodidades_csv() -> None:
     print(f"Total de imoveis processados: {len(df_comodidades):,}")
     print(f"Total de colunas binarias criadas: {len(df_comodidades.columns) - 1}")
     print("-" * 65)
-    print("TOP 20 COMODIDADES MAIS FREQUENTES (APOS MAPEAMENTO DE SINONIMOS):")
+    print("TOP 20 COMODIDADES MAIS FREQUENTES:")
     for com, count in contador.most_common(20):
         print(f"  - {com:35s}: {count:,} imoveis ({(count/len(df_comodidades))*100:.1f}%)")
     print("=" * 65)
