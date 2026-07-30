@@ -1,14 +1,25 @@
-import requests
+# -*- coding: utf-8 -*-
+"""Seletores de extração do chavesnamao (fonte da verdade dos parsers).
+
+O pipeline de produção é o :mod:`imoveis_jp.scraping.chaves_na_mao.scraper`,
+que reusa a classe daqui apenas para extrair os campos de um HTML já carregado.
+O ``main()`` no fim deste arquivo é o pipeline original, mantido como referência.
+"""
+
 import gzip
 import io
-import os
-import re
 import json
-import pandas as pd
-from bs4 import BeautifulSoup
-import time
+import os
 import random
+import re
+import time
+
+import requests
+from bs4 import BeautifulSoup
 from playwright.sync_api import sync_playwright
+
+from imoveis_jp import config
+
 
 class ScraperChavesNaMao:
     def __init__(self):
@@ -17,7 +28,7 @@ class ScraperChavesNaMao:
             'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
             'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
             'Accept-Language': 'pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7',
-            'Accept-Encoding': 'gzip, deflate, br',
+            'Accept-Encoding': 'gzip, deflate',  # sem 'br': requests não decodifica brotli sem a lib, e o sitemap voltava comprimido (0 links)
             'Connection': 'keep-alive',
         }
         self.pagina = None
@@ -170,7 +181,8 @@ class ScraperChavesNaMao:
         print(f"\n⚙️ Iniciando extração de dados para {len(links_finais)} imóveis...")
         
         # Alterado de volta para .json tradicional
-        arquivo_saida = "imoveis_joao_pessoa.json"
+        config.ensure_dirs()
+        arquivo_saida = config.ANUNCIOS_JSON
         lote_dados = []
         
         with sync_playwright() as p:

@@ -1,3 +1,32 @@
-.venv
-*.csv
-*.json
+# ambiente virtual
+.venv/
+venv/
+
+# python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.ruff_cache/
+
+# dados: data/raw/ e data/processed/ VÃO para o git — o time inteiro trabalha
+# sobre exatamente a mesma base. Só data/interim/ fica de fora, por ser
+# regenerável a partir de raw + código (e mudar toda hora durante a limpeza).
+data/interim/*
+!data/interim/.gitkeep
+
+# artefatos temporários do scrape paralelo (some depois do merge_parts)
+imoveis_joao_pessoa.parte*.json
+*.tmp
+scrape*.log
+
+# notebooks
+.ipynb_checkpoints/
+
+# editores / SO
+.vscode/
+.idea/
+Thumbs.db
+desktop.ini
