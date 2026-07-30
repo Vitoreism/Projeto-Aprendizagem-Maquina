@@ -26,6 +26,9 @@ PROCESSED = DATA / "processed"
 #: Arquivo canônico do scrape (todos os workers convergem para ele).
 ANUNCIOS_JSON = RAW / "imoveis_joao_pessoa.json"
 
+#: Arquivo intermediário de extrações via LLM (Groq).
+EXTRACTIONS_JSON = INTERIM / "extractions_llm.json"
+
 
 def links_cache(city: str, tipo: str, transacao: str) -> Path:
     """Cache dos links do sitemap para um escopo (cidade/tipo/transação)."""
