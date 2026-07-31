@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
 """
-modulo de extracao via llm para capturar atributos estruturados e lista dinamica
-de diferenciais do imovel contidos na descricao em texto (issue #9)
+pipeline empírico dinamico em 2 etapas para extracao de atributos via llm (issue #9):
+1. amostragem aberta em 1000 imoveis para descobrir os atributos reais mais frequentes
+2. construcao dinamica do schema baseado no ranking e aplicacao para 100% da base
 """
 
 from __future__ import annotations
@@ -22,7 +23,16 @@ from imoveis_jp import config
 # le credenciais salvas no arquivo .env
 load_dotenv()
 
-# prompt da etapa 1: descoberta aberta de atributos em amostra de 1000 imoveis
+# conjunto de palavras comuns que ja existem no html deterministico e nao precisam virar chave na llm
+COMODIDADES_HTML_IGNORAR = {
+    "piscina", "academia", "elevador", "portaria", "churrasqueira",
+    "salao de festas", "salao de jogos", "playground", "interfone",
+    "brinquedoteca", "espaco gourmet", "area de lazer", "quadra",
+    "cozinha", "area de servico", "vaga", "garagem", "apartamento",
+    "sala", "wc social", "1 vaga de garagem", "3 quartos", "2 quartos",
+}
+
+# prompt da etapa 1: descoberta aberta em 1000 imoveis
 SYSTEM_PROMPT_DISCOVERY = """Voce e um especialista em PLN e analise de dados imobiliarios.
 Sua tarefa e analisar a descricao do imovel e listar TODOS os atributos, caracteristicas, diferenciais, orientacoes e condicoes comerciais citados no texto livre.
 
@@ -47,49 +57,12 @@ Regras:
 2. Evite incluir frases longas, use termos curtos e padronizados em minusculo
 """
 
-# prompt da etapa 2: aplicacao estruturada em lote capturando todos os diferenciais
-SYSTEM_PROMPT_BATCH = """Voce e um especialista em analise de dados imobiliarios em Joao Pessoa (PB).
-Sua tarefa e analisar o texto de descricoes de imoveis e extrair atributos estruturados e uma lista dinamica de diferenciais citados.
-
-Para cada imovel recebido na lista, extraia:
-- "posicao_solar": "Nascente" | "Poente" | "Sul" | "Norte" | "Nao informado"
-- "distancia_praia_m": numero inteiro estimado de metros ate a praia (ex: 300) ou null se nao informado
-- "status_construcao": "Na planta" | "Em construcao" | "Pronto para morar" | "Usado" | "Nao informado"
-- "tipo_unidade": "Terreo com area" | "Terreo simples" | "Cobertura" | "Duplex" | "Apartamento tipo"
-- "vista_mar": true | false
-- "beira_mar": true | false
-- "moveis_projetados": true | false
-- "reformado": true | false
-- "aceita_permuta": true | false
-- "aceita_fgts": true | false
-- "diferenciais_unicos": lista de strings com todos os diferenciais, recursos ou atributos citados no texto (ex: ["pe direito duplo", "automacao residencial", "piscina privativa", "painel solar", "adega climatizada", "tomada carro eletrico", "solario", "jacuzzi"]).
-
-Responda ESTRITAMENTE com um objeto JSON valido contendo a chave "resultados", que e uma lista de objetos:
-{
-    "resultados": [
-        {
-            "id_lote": 0,
-            "posicao_solar": "Nascente",
-            "distancia_praia_m": 300,
-            "status_construcao": "Em construcao",
-            "tipo_unidade": "Apartamento tipo",
-            "vista_mar": true,
-            "beira_mar": false,
-            "moveis_projetados": false,
-            "reformado": false,
-            "aceita_permuta": false,
-            "aceita_fgts": false,
-            "diferenciais_unicos": ["pe direito duplo", "automacao residencial"]
-        }
-    ]
-}
-"""
-
 def executar_descoberta_amostral(
     client: Any,
     imoveis: List[Dict[str, Any]],
     model: str = "llama-3.1-8b-instant",
-) -> None:
+) -> List[str]:
+    # etapa 1: executa amostragem aberta para descobrir atributos mais frequentes
     print(f"\n[Etapa 1] Iniciando Descoberta Empirica de Atributos em {len(imoveis)} imoveis...")
 
     contador_atributos: Counter = Counter()
@@ -121,7 +94,8 @@ def executar_descoberta_amostral(
 
             for at in atributos:
                 if isinstance(at, str) and len(at.strip()) > 2:
-                    contador_atributos[at.strip().lower()] += 1
+                    norm = at.strip().lower()
+                    contador_atributos[norm] += 1
 
             amostras_salvas[url] = atributos
             print(f"OK! ({len(atributos)} atributos descobertos)")
@@ -131,6 +105,7 @@ def executar_descoberta_amostral(
 
         time.sleep(1.2)
 
+    # exporta o ranking estatistico de frequencia da amostragem
     arquivo_ranking = config.INTERIM / "discovered_attributes_rank.json"
     resultado_ranking = {
         "total_amostras_analisadas": len(amostras_salvas),
@@ -144,15 +119,66 @@ def executar_descoberta_amostral(
     print("ETAPA 1 (DESCOBERTA EMPIRICA DE ATRIBUTOS) CONCLUIDA COM SUCESSO!")
     print("=" * 65)
     print(f"Arquivo de Ranking salvo em: {arquivo_ranking}")
-    print("TOP 20 ATRIBUTOS MAIS FREQUENTES DESCOBERTOS NA AMOSTRA:")
-    for at, count in contador_atributos.most_common(20):
-        print(f"  - {at:40s}: {count} ocorrencias")
+    print("TOP 20 ATRIBUTOS REAIS MAIS FREQUENTES DESCOBERTOS:")
+
+    atributos_filtrados_relevantes = []
+    for at, count in contador_atributos.most_common(100):
+        if at not in COMODIDADES_HTML_IGNORAR:
+            atributos_filtrados_relevantes.append(at)
+            if len(atributos_filtrados_relevantes) <= 20:
+                print(f"  - {at:40s}: {count} ocorrencias")
+
     print("=" * 65)
+    return atributos_filtrados_relevantes[:25]
+
+
+def carregar_atributos_do_ranking() -> List[str]:
+    # le os atributos mais frequentes do arquivo de ranking descoberto na etapa 1
+    arquivo_ranking = config.INTERIM / "discovered_attributes_rank.json"
+    if not arquivo_ranking.exists():
+        # fallback seguro de atributos padrao se o ranking ainda nao existir
+        return [
+            "aceita fgts", "aceita permuta", "automacao residencial",
+            "distancia praia", "piscina privativa", "posicao solar nascente",
+            "posicao solar sul", "terreo com area privativa", "vista mar",
+            "beira mar", "moveis planejados", "reformado", "jacuzzi", "solario"
+        ]
+
+    with open(arquivo_ranking, "r", encoding="utf-8") as f:
+        dados = json.load(f)
+
+    ranking = dados.get("ranking_frequencia", {})
+    atributos_validos = []
+    for at, count in ranking.items():
+        if at not in COMODIDADES_HTML_IGNORAR and len(at) > 2:
+            atributos_validos.append(at)
+            if len(atributos_validos) >= 25:
+                break
+    return atributos_validos
+
+
+def construir_prompt_dinamico_batch(atributos_dinamicos: List[str]) -> str:
+    # gera o prompt em lote usando dinamicamente os atributos descobertos empiricamente
+    lista_chaves_str = "\n".join([f'- "{at.replace(" ", "_")}": true | false (se mencionar "{at}")' for at in atributos_dinamicos])
+
+    prompt = f"""Voce e um especialista em analise de dados imobiliarios em Joao Pessoa (PB).
+Sua tarefa e analisar o texto de descricoes de imoveis e extrair os seguintes atributos validados empiricamente:
+
+- "posicao_solar": "Nascente" | "Poente" | "Sul" | "Norte" | "Nao informado"
+- "distancia_praia_m": numero inteiro estimado de metros ate a praia ou null se nao informado
+- "status_construcao": "Na planta" | "Em construcao" | "Pronto para morar" | "Usado" | "Nao informado"
+- "tipo_unidade": "Terreo com area" | "Terreo simples" | "Cobertura" | "Duplex" | "Apartamento tipo"
+{lista_chaves_str}
+
+Responda ESTRITAMENTE com um objeto JSON valido contendo a chave "resultados", que e uma lista de objetos com os atributos de cada imovel.
+"""
+    return prompt
 
 
 def extrair_lote_atributos_llm(
     client: Any,
     lote_imoveis: List[Dict[str, Any]],
+    atributos_dinamicos: List[str],
     model: str = "llama-3.1-8b-instant",
     max_retries: int = 5,
 ) -> Dict[str, Dict[str, Any]]:
@@ -166,6 +192,7 @@ def extrair_lote_atributos_llm(
             desc = "sem descricao disponivel"
         payload_prompt.append({"id_lote": idx, "descricao": desc})
 
+    prompt_sistema = construir_prompt_dinamico_batch(atributos_dinamicos)
     prompt_usuario = f"Lista de Imoveis para Processar:\n{json.dumps(payload_prompt, ensure_ascii=False)}"
 
     base_delay = 2.0
@@ -173,7 +200,7 @@ def extrair_lote_atributos_llm(
         try:
             response = client.chat.completions.create(
                 messages=[
-                    {"role": "system", "content": SYSTEM_PROMPT_BATCH},
+                    {"role": "system", "content": prompt_sistema},
                     {"role": "user", "content": prompt_usuario},
                 ],
                 model=model,
@@ -190,12 +217,12 @@ def extrair_lote_atributos_llm(
                 id_lote = item_res.get("id_lote")
                 if id_lote is not None and 0 <= id_lote < len(lote_imoveis):
                     url_imovel = lote_imoveis[id_lote]["url_anuncio"]
-                    mapeamento_final[url_imovel] = _sanitizar_resposta_lote(item_res)
+                    mapeamento_final[url_imovel] = _sanitizar_resposta_dinamica(item_res, atributos_dinamicos)
 
             for idx, item in enumerate(lote_imoveis):
                 url = item["url_anuncio"]
                 if url not in mapeamento_final:
-                    mapeamento_final[url] = _retornar_atributos_padrao()
+                    mapeamento_final[url] = _retornar_atributos_padrao_dinamicos(atributos_dinamicos)
 
             return mapeamento_final
 
@@ -211,12 +238,12 @@ def extrair_lote_atributos_llm(
 
     res_falha = {}
     for item in lote_imoveis:
-        res_falha[item["url_anuncio"]] = _retornar_atributos_padrao()
+        res_falha[item["url_anuncio"]] = _retornar_atributos_padrao_dinamicos(atributos_dinamicos)
     return res_falha
 
 
-def _sanitizar_resposta_lote(dados: Dict[str, Any]) -> Dict[str, Any]:
-    res = _retornar_atributos_padrao()
+def _sanitizar_resposta_dinamica(dados: Dict[str, Any], atributos_dinamicos: List[str]) -> Dict[str, Any]:
+    res = _retornar_atributos_padrao_dinamicos(atributos_dinamicos)
 
     # distancia da praia em metros
     dist = dados.get("distancia_praia_m")
@@ -238,38 +265,29 @@ def _sanitizar_resposta_lote(dados: Dict[str, Any]) -> Dict[str, Any]:
     if tipo in ("Terreo com area", "Terreo simples", "Cobertura", "Duplex", "Apartamento tipo"):
         res["tipo_unidade"] = tipo
 
-    # booleanos
-    for c in ["vista_mar", "beira_mar", "moveis_projetados", "reformado", "aceita_permuta", "aceita_fgts"]:
-        v = dados.get(c)
+    # valida os atributos dinamicos como booleanos
+    for at in atributos_dinamicos:
+        chave = at.replace(" ", "_")
+        v = dados.get(chave) or dados.get(at)
         if isinstance(v, bool):
-            res[c] = v
+            res[chave] = v
         elif isinstance(v, str):
-            res[c] = v.lower() in ("true", "sim", "yes", "1")
-
-    # diferenciais sem nenhum filtro arbitrario para preservar 100% dos atributos extraidos da descricao
-    dif = dados.get("diferenciais_unicos")
-    if isinstance(dif, list):
-        res["diferenciais_unicos"] = [str(x).strip().lower() for x in dif if isinstance(x, str) and len(str(x).strip()) > 2]
-    elif isinstance(dif, str) and len(dif.strip()) > 2:
-        res["diferenciais_unicos"] = [dif.strip().lower()]
+            res[chave] = v.lower() in ("true", "sim", "yes", "1")
 
     return res
 
 
-def _retornar_atributos_padrao() -> Dict[str, Any]:
-    return {
+def _retornar_atributos_padrao_dinamicos(atributos_dinamicos: List[str]) -> Dict[str, Any]:
+    res = {
         "posicao_solar": "Nao informado",
         "distancia_praia_m": None,
         "status_construcao": "Nao informado",
         "tipo_unidade": "Apartamento tipo",
-        "vista_mar": False,
-        "beira_mar": False,
-        "moveis_projetados": False,
-        "reformado": False,
-        "aceita_permuta": False,
-        "aceita_fgts": False,
-        "diferenciais_unicos": [],
     }
+    for at in atributos_dinamicos:
+        chave = at.replace(" ", "_")
+        res[chave] = False
+    return res
 
 
 def carregar_extracoes_existentes(caminho: Path) -> Dict[str, Dict[str, Any]]:
@@ -297,6 +315,7 @@ def executar_pipeline_extracao_llm(
     sleep_between: float = 1.5,
     dry_run: bool = False,
     discover: bool = False,
+    reset_checkpoint: bool = False,
 ) -> None:
     config.ensure_dirs()
     input_file = config.ANUNCIOS_JSON
@@ -328,7 +347,15 @@ def executar_pipeline_extracao_llm(
         executar_descoberta_amostral(client=client, imoveis=imoveis, model=model)
         return
 
-    print(f"[OK] Iniciando Extracao Completa sem Filtros via Groq ({len(imoveis)} imoveis)...")
+    if reset_checkpoint and checkpoint_file.exists():
+        print("[Reset] Apagando checkpoint antigo para rodar o novo schema dinamico limpo...")
+        checkpoint_file.unlink()
+
+    # le o ranking empirico gerado na etapa 1 para montar o schema dinamico
+    atributos_dinamicos = carregar_atributos_do_ranking()
+
+    print(f"[OK] Iniciando Extracao de Schema Dinamico Empirico ({len(imoveis)} imoveis)...")
+    print(f"     Atributos Dinamicos Descobertos: {len(atributos_dinamicos)} atributos")
     print(f"     Tamanho do Lote (Batching): {batch_size} imoveis por requisicao")
     print(f"     Modelo selecionado: {model}")
     print(f"     Arquivo de Checkpoint: {checkpoint_file}")
@@ -345,7 +372,7 @@ def executar_pipeline_extracao_llm(
 
     if not pendentes:
         print("[Concluido] Todos os imoveis do escopo ja foram extraidos!")
-        fundir_extracoes_nos_csvs_processados()
+        fundir_extracoes_nos_csvs_processados(atributos_dinamicos)
         return
 
     lotes = [pendentes[i : i + batch_size] for i in range(0, len(pendentes), batch_size)]
@@ -359,6 +386,7 @@ def executar_pipeline_extracao_llm(
             resultados_lote = extrair_lote_atributos_llm(
                 client=client,
                 lote_imoveis=lote,
+                atributos_dinamicos=atributos_dinamicos,
                 model=model,
             )
 
@@ -373,11 +401,11 @@ def executar_pipeline_extracao_llm(
         print("\n[Interrompido] Processamento interrompido pelo usuario. Salvando progresso...")
     finally:
         salvar_extracoes_checkpoint(checkpoint_file, extracoes)
-        fundir_extracoes_nos_csvs_processados()
+        fundir_extracoes_nos_csvs_processados(atributos_dinamicos)
         print(f"[Concluido] Sessao finalizada! Total em checkpoint: {len(extracoes)} imoveis.")
 
 
-def fundir_extracoes_nos_csvs_processados() -> None:
+def fundir_extracoes_nos_csvs_processados(atributos_dinamicos: Optional[List[str]] = None) -> None:
     import pandas as pd
 
     checkpoint_file = config.EXTRACTIONS_JSON
@@ -393,15 +421,7 @@ def fundir_extracoes_nos_csvs_processados() -> None:
         print("[Aviso] O arquivo de extracoes esta vazio.")
         return
 
-    extracoes_formatadas = {}
-    for url, item in extracoes.items():
-        copia = dict(item)
-        dif = copia.get("diferenciais_unicos")
-        if isinstance(dif, list):
-            copia["diferenciais_unicos"] = ", ".join(dif)
-        extracoes_formatadas[url] = copia
-
-    df_extra = pd.DataFrame.from_dict(extracoes_formatadas, orient="index")
+    df_extra = pd.DataFrame.from_dict(extracoes, orient="index")
     df_extra.index.name = "url_anuncio"
     df_extra.reset_index(inplace=True)
 
@@ -410,10 +430,10 @@ def fundir_extracoes_nos_csvs_processados() -> None:
     print(f"[Sucesso] Atributos extraidos via LLM exportados para CSV: {caminho_saida}")
     print(f"          Total de registros normalizados: {len(df_extra)}")
 
-    fundir_json_enriquecido_v2()
+    fundir_json_enriquecido_v2(atributos_dinamicos)
 
 
-def fundir_json_enriquecido_v2() -> None:
+def fundir_json_enriquecido_v2(atributos_dinamicos: Optional[List[str]] = None) -> None:
     input_file = config.ANUNCIOS_JSON
     checkpoint_file = config.EXTRACTIONS_JSON
     output_json = config.INTERIM / "imoveis_joao_pessoa_v2.json"
@@ -427,6 +447,9 @@ def fundir_json_enriquecido_v2() -> None:
     with open(checkpoint_file, "r", encoding="utf-8") as f:
         extracoes = json.load(f)
 
+    if not atributos_dinamicos:
+        atributos_dinamicos = carregar_atributos_do_ranking()
+
     imoveis_v2 = []
     for item in imoveis_originais:
         url = item.get("url_anuncio")
@@ -435,7 +458,7 @@ def fundir_json_enriquecido_v2() -> None:
         if url and url in extracoes:
             copia_item.update(extracoes[url])
         else:
-            copia_item.update(_retornar_atributos_padrao())
+            copia_item.update(_retornar_atributos_padrao_dinamicos(atributos_dinamicos))
 
         imoveis_v2.append(copia_item)
 
@@ -447,7 +470,7 @@ def fundir_json_enriquecido_v2() -> None:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Extrai caracteristicas da descricao dos imoveis via Groq LLM (Issue #9)."
+        description="Pipeline empirico dinamico de extracao via Groq LLM (Issue #9)."
     )
     parser.add_argument(
         "--discover",
@@ -464,7 +487,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--batch-size",
         type=int,
         default=3,
-        help="Numero de imoveis por requisicao de lote (default: 3 imoveis/lote para maxima precisao).",
+        help="Numero de imoveis por requisicao de lote (default: 3 imoveis/lote).",
     )
     parser.add_argument(
         "--model",
@@ -477,6 +500,11 @@ def build_parser() -> argparse.ArgumentParser:
         type=float,
         default=1.5,
         help="Segundos de pausa entre requisicoes de lote (default: 1.5s).",
+    )
+    parser.add_argument(
+        "--reset",
+        action="store_true",
+        help="Apaga o checkpoint antigo para rodar a base com o novo schema dinamico limpo.",
     )
     parser.add_argument(
         "--dry-run",
@@ -505,6 +533,7 @@ def main() -> None:
             sleep_between=args.sleep,
             dry_run=args.dry_run,
             discover=args.discover,
+            reset_checkpoint=args.reset,
         )
 
 
