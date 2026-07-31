@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-modulo de extracao via llm com schema completo contendo todos os 100 atributos descobertos mais campo de diferenciais unicos (issue #9)
+modulo de extracao via llm otimizado para velocidade maxima com os 45 principais atributos do ranking mais o campo diferenciais unicos (issue #9)
 """
 
 from __future__ import annotations
@@ -157,8 +157,8 @@ def executar_descoberta_amostral(
     return atributos_relevantes
 
 
-def carregar_atributos_do_ranking(min_frequencia: int = 3) -> List[str]:
-    # carrega 100% de todos os atributos descobertos no ranking (ate 100 atributos)
+def carregar_atributos_do_ranking(min_frequencia: int = 5) -> List[str]:
+    # carrega os 45 atributos mais frequentes do ranking para manter payload enxuto e velocidade maxima
     arquivo_ranking = config.INTERIM / "discovered_attributes_rank.json"
     if not arquivo_ranking.exists():
         return []
@@ -172,7 +172,7 @@ def carregar_atributos_do_ranking(min_frequencia: int = 3) -> List[str]:
         if isinstance(at, str) and len(at.strip()) > 2 and count >= min_frequencia:
             atributos_validos.append(at.strip())
 
-    return atributos_validos[:100]
+    return atributos_validos[:45]
 
 
 def construir_prompt_dinamico_batch(atributos_dinamicos: List[str]) -> str:
@@ -361,11 +361,11 @@ def executar_pipeline_extracao_llm(
         print("[Reset] Apagando checkpoint antigo para rodar o novo schema dinamico limpo...", flush=True)
         checkpoint_file.unlink()
 
-    atributos_dinamicos = carregar_atributos_do_ranking(min_frequencia=3)
+    atributos_dinamicos = carregar_atributos_do_ranking(min_frequencia=5)
 
-    print(f"[OK] Iniciando Extracao Total com {len(atributos_dinamicos)} Atributos + Diferenciais Unicos ({len(imoveis)} imoveis)...", flush=True)
-    print(f"     Atributos Dinamicos Carregados do Ranking: {len(atributos_dinamicos)} atributos reais!")
-    print(f"     Campo Adicional: diferenciais_unicos (captura extras que nao viraram atributos)")
+    print(f"[OK] Iniciando Extracao Otimizada ({len(atributos_dinamicos)} Atributos Principais + Diferenciais Unicos) ({len(imoveis)} imoveis)...", flush=True)
+    print(f"     Atributos Dinamicos Carregados: {len(atributos_dinamicos)} atributos reais!")
+    print(f"     Campo Adicional: diferenciais_unicos (captura extras exclusivos)")
     print(f"     Tamanho do Lote (Batching): {batch_size} imoveis por requisicao")
     print(f"     Modelo selecionado: {model}")
     print(f"     Arquivo de Checkpoint: {checkpoint_file}")
@@ -456,7 +456,7 @@ def fundir_json_enriquecido_v2(atributos_dinamicos: Optional[List[str]] = None) 
         extracoes = json.load(f)
 
     if not atributos_dinamicos:
-        atributos_dinamicos = carregar_atributos_do_ranking(min_frequencia=3)
+        atributos_dinamicos = carregar_atributos_do_ranking(min_frequencia=5)
 
     imoveis_v2 = []
     for item in imoveis_originais:
@@ -478,7 +478,7 @@ def fundir_json_enriquecido_v2(atributos_dinamicos: Optional[List[str]] = None) 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Pipeline com 100 atributos completos mais diferenciais unicos via Groq LLM (Issue #9)."
+        description="Pipeline otimizado com atributos principais e diferenciais unicos via Groq LLM (Issue #9)."
     )
     parser.add_argument(
         "--discover",
