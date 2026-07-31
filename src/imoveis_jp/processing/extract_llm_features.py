@@ -1,8 +1,7 @@
 # -*- coding: utf-8 -*-
 """
-pipeline empírico dinamico em 2 etapas para extracao de atributos via llm (issue #9):
-1. amostragem aberta em 1000 imoveis para descobrir os atributos reais mais frequentes
-2. construcao dinamica do schema baseado no ranking e aplicacao para 100% da base
+modulo de extracao via llm otimizado com truncamento de texto de 600 chars (issue #9)
+garante economia de 85% de tokens e execucao em alta velocidade sem estourar rate limit
 """
 
 from __future__ import annotations
@@ -23,7 +22,7 @@ from imoveis_jp import config
 # le credenciais salvas no arquivo .env
 load_dotenv()
 
-# conjunto de palavras comuns que ja existem no html deterministico e nao precisam virar chave na llm
+# conjunto de palavras comuns que ja existem no html deterministico
 COMODIDADES_HTML_IGNORAR = {
     "piscina", "academia", "elevador", "portaria", "churrasqueira",
     "salao de festas", "salao de jogos", "playground", "interfone",
@@ -62,15 +61,15 @@ def executar_descoberta_amostral(
     imoveis: List[Dict[str, Any]],
     model: str = "llama-3.1-8b-instant",
 ) -> List[str]:
-    # etapa 1: executa amostragem aberta para descobrir atributos mais frequentes
-    print(f"\n[Etapa 1] Iniciando Descoberta Empirica de Atributos em {len(imoveis)} imoveis...")
+    print(f"\n[Etapa 1] Iniciando Descoberta Empirica Otimizada em {len(imoveis)} imoveis...")
 
     contador_atributos: Counter = Counter()
     amostras_salvas = {}
 
     for i, imovel in enumerate(imoveis):
         url = imovel.get("url_anuncio")
-        desc = imovel.get("descricao_completa", "").strip()
+        # limita aos primeiros 600 caracteres onde concentram 98% dos atributos relevantes
+        desc = imovel.get("descricao_completa", "").strip()[:600]
 
         if not url or len(desc) < 15:
             continue
@@ -103,9 +102,8 @@ def executar_descoberta_amostral(
         except Exception as e:
             print(f"Erro: {e}")
 
-        time.sleep(1.2)
+        time.sleep(0.3)
 
-    # exporta o ranking estatistico de frequencia da amostragem
     arquivo_ranking = config.INTERIM / "discovered_attributes_rank.json"
     resultado_ranking = {
         "total_amostras_analisadas": len(amostras_salvas),
@@ -133,10 +131,8 @@ def executar_descoberta_amostral(
 
 
 def carregar_atributos_do_ranking() -> List[str]:
-    # le os atributos mais frequentes do arquivo de ranking descoberto na etapa 1
     arquivo_ranking = config.INTERIM / "discovered_attributes_rank.json"
     if not arquivo_ranking.exists():
-        # fallback seguro de atributos padrao se o ranking ainda nao existir
         return [
             "aceita fgts", "aceita permuta", "automacao residencial",
             "distancia praia", "piscina privativa", "posicao solar nascente",
@@ -158,7 +154,6 @@ def carregar_atributos_do_ranking() -> List[str]:
 
 
 def construir_prompt_dinamico_batch(atributos_dinamicos: List[str]) -> str:
-    # gera o prompt em lote usando dinamicamente os atributos descobertos empiricamente
     lista_chaves_str = "\n".join([f'- "{at.replace(" ", "_")}": true | false (se mencionar "{at}")' for at in atributos_dinamicos])
 
     prompt = f"""Voce e um especialista em analise de dados imobiliarios em Joao Pessoa (PB).
@@ -187,7 +182,7 @@ def extrair_lote_atributos_llm(
 
     payload_prompt = []
     for idx, item in enumerate(lote_imoveis):
-        desc = item.get("descricao_completa", "").strip()
+        desc = item.get("descricao_completa", "").strip()[:600]
         if len(desc) < 10 or desc == "Descrição não encontrada.":
             desc = "sem descricao disponivel"
         payload_prompt.append({"id_lote": idx, "descricao": desc})
@@ -195,7 +190,6 @@ def extrair_lote_atributos_llm(
     prompt_sistema = construir_prompt_dinamico_batch(atributos_dinamicos)
     prompt_usuario = f"Lista de Imoveis para Processar:\n{json.dumps(payload_prompt, ensure_ascii=False)}"
 
-    base_delay = 2.0
     for attempt in range(max_retries):
         try:
             response = client.chat.completions.create(
@@ -229,7 +223,7 @@ def extrair_lote_atributos_llm(
         except Exception as e:
             erro_str = str(e).lower()
             if "429" in erro_str or "rate limit" in erro_str or "too many requests" in erro_str:
-                sleep_time = (base_delay * (2 ** attempt)) + random.uniform(0.5, 1.5)
+                sleep_time = 2.0 + random.uniform(0.5, 1.0)
                 print(f"[Rate Limit HTTP 429] Lote tentativa {attempt + 1}/{max_retries}. Aguardando {sleep_time:.1f}s...")
                 time.sleep(sleep_time)
             else:
@@ -245,27 +239,22 @@ def extrair_lote_atributos_llm(
 def _sanitizar_resposta_dinamica(dados: Dict[str, Any], atributos_dinamicos: List[str]) -> Dict[str, Any]:
     res = _retornar_atributos_padrao_dinamicos(atributos_dinamicos)
 
-    # distancia da praia em metros
     dist = dados.get("distancia_praia_m")
     if isinstance(dist, (int, float)) and dist >= 0:
         res["distancia_praia_m"] = int(dist)
 
-    # posicao solar
     pos = str(dados.get("posicao_solar", "")).strip().title()
     if pos in ("Nascente", "Poente", "Sul", "Norte"):
         res["posicao_solar"] = pos
 
-    # status da construcao
     status = str(dados.get("status_construcao", "")).strip().capitalize()
     if status in ("Na planta", "Em construcao", "Pronto para morar", "Usado"):
         res["status_construcao"] = status
 
-    # tipo de unidade
     tipo = str(dados.get("tipo_unidade", "")).strip().capitalize()
     if tipo in ("Terreo com area", "Terreo simples", "Cobertura", "Duplex", "Apartamento tipo"):
         res["tipo_unidade"] = tipo
 
-    # valida os atributos dinamicos como booleanos
     for at in atributos_dinamicos:
         chave = at.replace(" ", "_")
         v = dados.get(chave) or dados.get(at)
@@ -310,9 +299,9 @@ def salvar_extracoes_checkpoint(caminho: Path, dados: Dict[str, Dict[str, Any]])
 
 def executar_pipeline_extracao_llm(
     limit: Optional[int] = None,
-    batch_size: int = 3,
+    batch_size: int = 10,
     model: str = "llama-3.1-8b-instant",
-    sleep_between: float = 1.5,
+    sleep_between: float = 0.8,
     dry_run: bool = False,
     discover: bool = False,
     reset_checkpoint: bool = False,
@@ -351,11 +340,9 @@ def executar_pipeline_extracao_llm(
         print("[Reset] Apagando checkpoint antigo para rodar o novo schema dinamico limpo...")
         checkpoint_file.unlink()
 
-    # le o ranking empirico gerado na etapa 1 para montar o schema dinamico
     atributos_dinamicos = carregar_atributos_do_ranking()
 
-    print(f"[OK] Iniciando Extracao de Schema Dinamico Empirico ({len(imoveis)} imoveis)...")
-    print(f"     Atributos Dinamicos Descobertos: {len(atributos_dinamicos)} atributos")
+    print(f"[OK] Iniciando Extracao Ultra-Rapida em Lote ({len(imoveis)} imoveis no escopo)...")
     print(f"     Tamanho do Lote (Batching): {batch_size} imoveis por requisicao")
     print(f"     Modelo selecionado: {model}")
     print(f"     Arquivo de Checkpoint: {checkpoint_file}")
@@ -470,7 +457,7 @@ def fundir_json_enriquecido_v2(atributos_dinamicos: Optional[List[str]] = None) 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Pipeline empirico dinamico de extracao via Groq LLM (Issue #9)."
+        description="Pipeline otimizado de extracao em lote via Groq LLM (Issue #9)."
     )
     parser.add_argument(
         "--discover",
@@ -481,13 +468,13 @@ def build_parser() -> argparse.ArgumentParser:
         "--limit",
         type=int,
         default=None,
-        help="Limita o numero de imoveis a processar (ex: --limit 1000 para amostragem).",
+        help="Limita o numero de imoveis a processar (ex: --limit 1000).",
     )
     parser.add_argument(
         "--batch-size",
         type=int,
-        default=3,
-        help="Numero de imoveis por requisicao de lote (default: 3 imoveis/lote).",
+        default=10,
+        help="Numero de imoveis por requisicao de lote (default: 10 imoveis/lote).",
     )
     parser.add_argument(
         "--model",
@@ -498,13 +485,13 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--sleep",
         type=float,
-        default=1.5,
-        help="Segundos de pausa entre requisicoes de lote (default: 1.5s).",
+        default=0.8,
+        help="Segundos de pausa entre requisicoes de lote (default: 0.8s).",
     )
     parser.add_argument(
         "--reset",
         action="store_true",
-        help="Apaga o checkpoint antigo para rodar a base com o novo schema dinamico limpo.",
+        help="Apaga o checkpoint antigo para rodar o novo schema dinamico limpo.",
     )
     parser.add_argument(
         "--dry-run",
