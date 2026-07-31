@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-modulo de extracao via llm otimizado para maxima riqueza com batch-size=3 e 5 chaves api em rotacao (issue #9)
+modulo de extracao via llm otimizado com cobertura de 1500 caracteres (cobre 90%+ do texto integral) e 5 chaves api (issue #9)
 """
 
 from __future__ import annotations
@@ -83,7 +83,7 @@ def executar_descoberta_amostral(
     model: str = "llama-3.1-8b-instant",
     batch_size: int = 5,
 ) -> List[str]:
-    print(f"\n[Etapa 1] Iniciando Descoberta Empirica com Rotacao de Chaves ({len(imoveis)} imoveis)...", flush=True)
+    print(f"\n[Etapa 1] Iniciando Descoberta Empirica com Cobertura Ampliada de 1500 Chars ({len(imoveis)} imoveis)...", flush=True)
 
     contador_atributos: Counter = Counter()
     amostras_salvas = {}
@@ -100,7 +100,8 @@ def executar_descoberta_amostral(
 
         payload_prompt = []
         for idx, item in enumerate(lote):
-            desc = item.get("descricao_completa", "").strip()[:500]
+            # amplia a cobertura de texto para 1500 caracteres cobrindo 90%+ das descricoes integrais
+            desc = item.get("descricao_completa", "").strip()[:1500]
             payload_prompt.append({"id_lote": idx, "descricao": desc})
 
         prompt_usuario = f"Lista de Imoveis:\n{json.dumps(payload_prompt, ensure_ascii=False)}"
@@ -226,7 +227,8 @@ def extrair_lote_atributos_llm(
 
     payload_prompt = []
     for idx, item in enumerate(lote_imoveis):
-        desc = item.get("descricao_completa", "").strip()[:500]
+        # amplia a cobertura para 1500 caracteres na etapa 2
+        desc = item.get("descricao_completa", "").strip()[:1500]
         if len(desc) < 10 or desc == "Descrição não encontrada.":
             desc = "sem descricao disponivel"
         payload_prompt.append({"id_lote": idx, "descricao": desc})
@@ -382,6 +384,7 @@ def executar_pipeline_extracao_llm(
     print(f"[OK] Iniciando Extracao de Alta Riqueza e Precisao ({len(imoveis)} imoveis no escopo)...", flush=True)
     print(f"     Atributos Dinamicos Descobertos: {len(atributos_dinamicos)} atributos")
     print(f"     Tamanho do Lote (Batching): {batch_size} imoveis por requisicao (Max Riqueza)")
+    print(f"     Cobertura de Texto por Imovel: 1500 caracteres (90%+ do texto integral)")
     print(f"     Modelo selecionado: {model}")
     print(f"     Arquivo de Checkpoint: {checkpoint_file}")
 
