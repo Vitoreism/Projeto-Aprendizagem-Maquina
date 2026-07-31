@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-modulo de extracao via llm com paralelismo concorrente (ThreadPoolExecutor) e 15 chaves api em rotacao (issue #9)
-garante velocidade maxima absoluta processando ate 300+ imoveis por minuto
+modulo de extracao via llm ultra acelerado com 12 workers simultaneos em paralelo e pool de 15 chaves groq (issue #9)
 """
 
 from __future__ import annotations
@@ -341,7 +340,7 @@ def salvar_extracoes_checkpoint(caminho: Path, dados: Dict[str, Dict[str, Any]])
 def executar_pipeline_extracao_llm(
     limit: Optional[int] = None,
     batch_size: int = 6,
-    workers: int = 6,
+    workers: int = 12,
     model: str = "llama-3.1-8b-instant",
     sleep_between: float = 0.1,
     dry_run: bool = False,
@@ -374,7 +373,7 @@ def executar_pipeline_extracao_llm(
 
     atributos_dinamicos = carregar_atributos_do_ranking(min_frequencia=5)
 
-    print(f"[OK] Iniciando Extracao Paralela Concorrente ({workers} Workers Simultaneos) ({len(imoveis)} imoveis)...", flush=True)
+    print(f"[OK] Iniciando Extracao Paralela Ultra Acelerada ({workers} Workers Simultaneos) ({len(imoveis)} imoveis)...", flush=True)
     print(f"     Atributos Dinamicos Carregados: {len(atributos_dinamicos)} atributos reais!")
     print(f"     Pool de Chaves API: {len(clientes)} chaves ativas em rotacao")
     print(f"     Tamanho do Lote (Batching): {batch_size} imoveis por lote (98.5% Riqueza)")
@@ -410,7 +409,6 @@ def executar_pipeline_extracao_llm(
         return idx_lote, res_lote
 
     try:
-        # paraleliza a chamada de lotes em threads concorrentes consumindo o pool de chaves api
         with ThreadPoolExecutor(max_workers=workers) as executor:
             futures = {executor.submit(processar_lote_worker, (i, lote)): i for i, lote in enumerate(lotes)}
             
@@ -497,7 +495,7 @@ def fundir_json_enriquecido_v2(atributos_dinamicos: Optional[List[str]] = None) 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Pipeline com paralelismo concorrente (ThreadPoolExecutor) via Groq LLM (Issue #9)."
+        description="Pipeline com 12 workers paralelos via Groq LLM (Issue #9)."
     )
     parser.add_argument(
         "--discover",
@@ -519,8 +517,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--workers",
         type=int,
-        default=6,
-        help="Numero de threads worker paralelas simultaneas (default: 6 threads).",
+        default=12,
+        help="Numero de threads worker paralelas simultaneas (default: 12 threads).",
     )
     parser.add_argument(
         "--model",
