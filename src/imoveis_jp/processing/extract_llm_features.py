@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
-modulo de extracao via llm para capturar atributos estruturados e lista dinamica
-de diferenciais exoticos do imovel contidos na descricao em texto (issue #9)
+modulo de extracao via llm com suporte a amostragem aberta (descoberta empirica de atributos)
+e aplicacao em lote para toda a base de imoveis (issue #9)
 """
 
 from __future__ import annotations
@@ -12,6 +12,7 @@ import os
 import random
 import sys
 import time
+from collections import Counter
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -21,7 +22,32 @@ from imoveis_jp import config
 # le credenciais salvas no arquivo .env
 load_dotenv()
 
-# prompt em lote capturando atributos estruturados e diferenciais exoticos
+# prompt da etapa 1: descoberta aberta de atributos em amostra de 1000 imoveis
+SYSTEM_PROMPT_DISCOVERY = """Voce e um especialista em PLN e analise de dados imobiliarios.
+Sua tarefa e analisar a descricao do imovel e listar TODOS os atributos, caracteristicas, diferenciais, orientacoes e condicoes comerciais citados no texto livre.
+
+Responda ESTRITAMENTE com um objeto JSON valido contendo a chave "atributos_encontrados", que e uma lista de strings curtas em minusculo:
+{
+    "atributos_encontrados": [
+        "posicao solar nascente",
+        "distancia 200m da praia",
+        "terreo com area privativa",
+        "em construcao",
+        "entrega em 2026",
+        "moveis planejados na cozinha",
+        "aceita permuta",
+        "aceita fgts",
+        "automacao residencial",
+        "piscina privativa"
+    ]
+}
+
+Regras:
+1. Extraia qualquer informacao relevante de posicao solar, distancia do mar, fase da obra, tipologia, acabamento, condicoes comerciais e diferenciais
+2. Evite incluir frases longas, use termos curtos e padronizados em minusculo
+"""
+
+# prompt da etapa 2: aplicacao estruturada em lote baseada na descoberta
 SYSTEM_PROMPT_BATCH = """Voce e um especialista em analise de dados imobiliarios em Joao Pessoa (PB).
 Sua tarefa e analisar o texto de descricoes de imoveis e extrair atributos estruturados e uma lista dinamica de diferenciais raros/exoticos.
 
@@ -36,7 +62,9 @@ Para cada imovel recebido na lista, extraia:
 - "reformado": true | false
 - "aceita_permuta": true | false
 - "aceita_fgts": true | false
-- "diferenciais_unicos": lista de strings com recursos raros, luxuosos ou exoticos citados no texto (ex: ["pe direito duplo", "automacao residencial", "piscina privativa na varanda", "painel solar", "adega climatizada", "fechadura digital", "tomada carro eletrico"]) ou [] se nao houver
+- "diferenciais_unicos": lista de strings com diferenciais raros ou exoticos do imovel (ex: ["pe direito duplo", "automacao residencial", "piscina privativa na varanda", "painel solar", "adega climatizada", "tomada carro eletrico", "solario", "jacuzzi"]).
+
+ATENCAO: NAO INCLUA comodidades padrao do html (como piscina, academia, elevador, portaria, salao de festas). Extraia APENAS diferenciais raros ou exoticos do imovel.
 
 Responda ESTRITAMENTE com um objeto JSON valido contendo a chave "resultados", que e uma lista de objetos:
 {
@@ -57,20 +85,74 @@ Responda ESTRITAMENTE com um objeto JSON valido contendo a chave "resultados", q
         }
     ]
 }
-
-Regras de Extracao:
-1. "posicao_solar": "Nascente", "Poente", "Sul" ou "Norte" apenas se explicitado. senao "Nao informado"
-2. "distancia_praia_m": extrair numeros em metros (ex: "300m da praia" -> 300) ou null
-3. "status_construcao": "Na planta", "Em construcao", "Pronto para morar" ou "Usado"
-4. "tipo_unidade": "Terreo com area" se mencionar terreo com area privativa/quintal, "Cobertura" se cobertura/duplex
-5. "vista_mar": true se mencionar vista para o mar ou vista mar
-6. "beira_mar": true se mencionar pe na areia ou beira mar
-7. "moveis_projetados": true se mencionar armarios projetados, moveis planejados ou embutidos
-8. "reformado": true se mencionar reformado ou novo
-9. "aceita_permuta": true se mencionar aceita permuta ou troca
-10. "aceita_fgts": true se mencionar permite utilizacao de FGTS
-11. "diferenciais_unicos": inclua expressoses curtas em minusculo para qualquer diferencial unico ou exotico relevante do imovel
 """
+
+def executar_descoberta_amostral(
+    client: Any,
+    imoveis: List[Dict[str, Any]],
+    model: str = "llama-3.1-8b-instant",
+) -> None:
+    # etapa 1: executa amostragem aberta para descobrir atributos mais frequentes
+    print(f"\n[Etapa 1] Iniciando Descoberta Empirica de Atributos em {len(imoveis)} imoveis...")
+
+    contador_atributos: Counter = Counter()
+    amostras_salvas = {}
+
+    for i, imovel in enumerate(imoveis):
+        url = imovel.get("url_anuncio")
+        desc = imovel.get("descricao_completa", "").strip()
+
+        if not url or len(desc) < 15:
+            continue
+
+        print(f"[{i + 1}/{len(imoveis)}] Analisando amostra: {url[-45:]}...", end=" ")
+
+        try:
+            response = client.chat.completions.create(
+                messages=[
+                    {"role": "system", "content": SYSTEM_PROMPT_DISCOVERY},
+                    {"role": "user", "content": f"Descricao:\n{desc}"},
+                ],
+                model=model,
+                temperature=0.2,
+                response_format={"type": "json_object"},
+            )
+
+            conteudo = response.choices[0].message.content
+            dados = json.loads(conteudo)
+            atributos = dados.get("atributos_encontrados", [])
+
+            for at in atributos:
+                if isinstance(at, str) and len(at.strip()) > 2:
+                    contador_atributos[at.strip().lower()] += 1
+
+            amostras_salvas[url] = atributos
+            print(f"OK! ({len(atributos)} atributos descobertos)")
+
+        except Exception as e:
+            print(f"Erro: {e}")
+
+        time.sleep(1.2)
+
+    # exporta o ranking de frequencia de atributos descobertos na amostragem
+    arquivo_ranking = config.INTERIM / "discovered_attributes_rank.json"
+    resultado_ranking = {
+        "total_amostras_analisadas": len(amostras_salvas),
+        "ranking_frequencia": dict(contador_atributos.most_common(100)),
+    }
+
+    with open(arquivo_ranking, "w", encoding="utf-8") as f:
+        json.dump(resultado_ranking, f, ensure_ascii=False, indent=2)
+
+    print("\n" + "=" * 65)
+    print("ETAPA 1 (DESCOBERTA EMPIRICA DE ATRIBUTOS) CONCLUIDA COM SUCESSO!")
+    print("=" * 65)
+    print(f"Arquivo de Ranking salvo em: {arquivo_ranking}")
+    print("TOP 20 ATRIBUTOS MAIS FREQUENTES DESCOBERTOS NA AMOSTRA:")
+    for at, count in contador_atributos.most_common(20):
+        print(f"  - {at:40s}: {count} ocorrencias")
+    print("=" * 65)
+
 
 def extrair_lote_atributos_llm(
     client: Any,
@@ -168,12 +250,10 @@ def _sanitizar_resposta_lote(dados: Dict[str, Any]) -> Dict[str, Any]:
         elif isinstance(v, str):
             res[c] = v.lower() in ("true", "sim", "yes", "1")
 
-    # diferenciais exoticos (lista de strings)
+    # diferenciais exoticos
     dif = dados.get("diferenciais_unicos")
     if isinstance(dif, list):
         res["diferenciais_unicos"] = [str(x).strip().lower() for x in dif if isinstance(x, str) and len(str(x).strip()) > 2]
-    elif isinstance(dif, str) and len(dif.strip()) > 2:
-        res["diferenciais_unicos"] = [dif.strip().lower()]
 
     return res
 
@@ -218,6 +298,7 @@ def executar_pipeline_extracao_llm(
     model: str = "llama-3.1-8b-instant",
     sleep_between: float = 1.5,
     dry_run: bool = False,
+    discover: bool = False,
 ) -> None:
     config.ensure_dirs()
     input_file = config.ANUNCIOS_JSON
@@ -233,19 +314,9 @@ def executar_pipeline_extracao_llm(
     if limit:
         imoveis = imoveis[:limit]
 
-    print(f"[OK] Iniciando Extracao de Atributos e Diferenciais Exoticos via Groq ({len(imoveis)} imoveis)...")
-    print(f"     Tamanho do Lote (Batching): {batch_size} imoveis por requisicao")
-    print(f"     Modelo selecionado: {model}")
-    print(f"     Arquivo de Checkpoint: {checkpoint_file}")
-
-    if dry_run:
-        print("[DRY-RUN] Modo --dry-run ativado. Nenhuma chamada de API sera realizada.")
-        return
-
     api_key = os.environ.get("GROQ_API_KEY")
     if not api_key:
         print("[Erro] GROQ_API_KEY nao foi encontrada nas variaveis de ambiente nem no arquivo .env.")
-        print("       Adicione GROQ_API_KEY=gsk_sua_chave no arquivo .env na raiz do projeto.")
         sys.exit(1)
 
     try:
@@ -254,6 +325,20 @@ def executar_pipeline_extracao_llm(
     except ImportError:
         print("[Erro] A biblioteca 'groq' nao esta instalada. Execute: pip install groq")
         sys.exit(1)
+
+    # se a flag --discover for ativada, roda a etapa 1 de amostragem aberta
+    if discover:
+        executar_descoberta_amostral(client=client, imoveis=imoveis, model=model)
+        return
+
+    print(f"[OK] Iniciando Extracao de Atributos via Groq ({len(imoveis)} imoveis)...")
+    print(f"     Tamanho do Lote (Batching): {batch_size} imoveis por requisicao")
+    print(f"     Modelo selecionado: {model}")
+    print(f"     Arquivo de Checkpoint: {checkpoint_file}")
+
+    if dry_run:
+        print("[DRY-RUN] Modo --dry-run ativado. Nenhuma chamada de API sera realizada.")
+        return
 
     extracoes = carregar_extracoes_existentes(checkpoint_file)
     print(f"[Checkpoint] Extracoes previamente salvas: {len(extracoes)}")
@@ -309,7 +394,6 @@ def fundir_extracoes_nos_csvs_processados() -> None:
         print("[Aviso] O arquivo de extracoes esta vazio.")
         return
 
-    # converte listas de diferenciais em string separada por virgula para o csv
     extracoes_formatadas = {}
     for url, item in extracoes.items():
         copia = dict(item)
@@ -327,12 +411,10 @@ def fundir_extracoes_nos_csvs_processados() -> None:
     print(f"[Sucesso] Atributos extraidos via LLM exportados para CSV: {caminho_saida}")
     print(f"          Total de registros normalizados: {len(df_extra)}")
 
-    # tambem gera o json v2 no mesmo formato da lista do scrap original
     fundir_json_enriquecido_v2()
 
 
 def fundir_json_enriquecido_v2() -> None:
-    # cria a v2 do json do scrap unindo os campos originais com os atributos extraidos via llm
     input_file = config.ANUNCIOS_JSON
     checkpoint_file = config.EXTRACTIONS_JSON
     output_json = config.INTERIM / "imoveis_joao_pessoa_v2.json"
@@ -369,10 +451,15 @@ def build_parser() -> argparse.ArgumentParser:
         description="Extrai caracteristicas da descricao dos imoveis via Groq LLM (Issue #9)."
     )
     parser.add_argument(
+        "--discover",
+        action="store_true",
+        help="Executa a Etapa 1: amostragem aberta para descoberta empirica de atributos em N imoveis.",
+    )
+    parser.add_argument(
         "--limit",
         type=int,
         default=None,
-        help="Limita o numero de imoveis a processar (util para testes).",
+        help="Limita o numero de imoveis a processar (ex: --limit 1000 para amostragem).",
     )
     parser.add_argument(
         "--batch-size",
@@ -418,6 +505,7 @@ def main() -> None:
             model=args.model,
             sleep_between=args.sleep,
             dry_run=args.dry_run,
+            discover=args.discover,
         )
 
 

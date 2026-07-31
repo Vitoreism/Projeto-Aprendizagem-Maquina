@@ -1,4 +1,4 @@
-# Documentação Técnica e Acadêmica da Issue #9: Extração de Atributos e Diferenciais Exóticos via LLM (Groq API)
+# Metodologia Empírica da Issue #9: Amostragem Aberta e Descoberta Científica de Atributos via LLM
 
 **Autor:** Gabriel Ribeiro (`@gabrielbribeiroo`)  
 **Projeto:** Previsão e Análise de Preços de Imóveis em João Pessoa (PB)  
@@ -8,60 +8,51 @@
 
 ---
 
-## 1. Justificativa da Seleção de Atributos e Captura de Diferenciais Exóticos
+## 1. Fundamentação Científica da Metodologia Empírica em 2 Etapas
 
-Em vez de definir atributos arbitrários ou fixos, realizou-se uma análise amostral sobre as descrições brutas e comodidades do dataset (`data/raw/imoveis_joao_pessoa.json`).
+Para evitar decisões arbitrárias sobre quais atributos devem ser extraídos dos textos livres das descrições, adotou-se uma **metodologia estritamente orientada a dados (Data-Driven Discovery)** dividida em 2 etapas:
 
-Constatou-se que corretores e proprietários frequentemente omitiram dados nos campos estruturados do formulário HTML, inserindo informações cruciais para a precificação apenas no texto livre da descrição.
-
-### 📋 Atributos Selecionados e Justificativa de Escolha:
-
-1. **`distancia_praia_m` (Numérico / Metros):**
-   - *Motivação:* Em João Pessoa, a proximidade com o mar (ex: "150m da praia", "300m do mar") é um dos fatores de maior impacto no preço por $m^2$. O formulário HTML do portal não possui campo numérico de distância em metros.
-2. **`posicao_solar` (Categórico: Nascente / Poente / Sul / Norte):**
-   - *Motivação:* A orientação solar determina o nível de ventilação e incidência de calor à tarde no litoral paraibano. Imóveis *Nascente* têm valorização superior.
-3. **`status_construcao` (Categórico: Na planta / Em construção / Pronto p/ morar / Usado):**
-   - *Motivação:* Identifica a fase do imóvel. Imóveis em construção ou na planta costumam ter preços abaixo do valor de mercado pronto.
-4. **`tipo_unidade` (Categórico: Térreo com área / Térreo simples / Cobertura / Duplex / Tipo):**
-   - *Motivação:* Apartamentos térreos com área privativa externa (área própria) possuem precificação diferente de apartamentos em andares intermediários.
-5. **`vista_mar` / `beira_mar` (Booleanos):**
-   - *Motivação:* Distingue imóveis que possuem apenas vista para o mar daqueles localizados na avenida beira-mar (pé na areia).
-6. **`moveis_projetados` (Booleano):**
-   - *Motivação:* Identifica imóveis com armários embutidos e móveis planejados instalados, agregando valor à venda.
-7. **`reformado` (Booleano):**
-   - *Motivação:* Identifica imóveis usados que passaram por atualização completa de acabamento.
-8. **`aceita_permuta` / `aceita_fgts` (Booleanos):**
-   - *Motivação:* Condições comerciais que ampliam o público comprador.
-9. **`diferenciais_unicos` (Lista Dinâmica de Strings):**
-   - *Motivação:* **Previne a perda de atributos exóticos ou raros.** Captura recursos como *"pé direito duplo"*, *"tomada para carro elétrico"*, *"automação residencial"*, *"jacuzzi"*, *"painéis solares"* ou *"solário"*.
+```mermaid
+graph TD
+    A["Base Bruta (10.758 Imóveis)"] --> B["Etapa 1: Amostragem Aberta (1.000 Imóveis)"]
+    B --> C["Extração Não-Engessada de Todos os Atributos Citados"]
+    C --> D["Análise Estatística de Frequência e Ocorrência"]
+    D --> E["Seleção Consolidada dos Atributos Reais Mais Frequentes"]
+    E --> F["Etapa 2: Replicação em Lote (100% da Base - 10.758 Imóveis)"]
+    F --> G["Geração da v2 do JSON do Scrap (imoveis_joao_pessoa_v2.json)"]
+```
 
 ---
 
-## 2. Estratégia de Processamento em Lote (Batching)
+## 2. Etapa 1: Amostragem Aberta (Descoberta de Atributos)
 
-Para permitir o processamento dos 10.758 imóveis no mesmo dia no plano gratuito do Groq Cloud sem perda de acurácia:
-* **Tamanho do Lote:** 5 imóveis por chamada de API (`--batch-size 5`).
-* **Redução de Chamadas:** Reduziu 10.758 chamadas para apenas **~2.150 requisições**.
-* **Tempo Total Estimado:** ~35 a 45 minutos.
+### 🔬 O Que É Executado
+1. Seleciona-se uma amostra representativa de **1.000 imóveis** da base bruta.
+2. A LLM recebe o texto da descrição sem um schema de chaves engessadas predefinidas, instruída a listar **todas as características, condições comerciais, orientações e diferenciais citados**.
+3. O script contabiliza a frequência de ocorrência de cada frase/atributo na amostra.
 
----
-
-## 3. Resiliência do Pipeline
-
-* **Tratamento de Rate Limits (HTTP 429):** Algoritmo de *Exponential Backoff* com Jitter.
-* **Salvamento Atômico de Checkpoint (`extractions_llm.json`):** Salva o progresso a cada lote concluído de forma atômica e resumível.
+### 📊 Critério de Seleção dos Atributos Finais
+Serão promovidos a colunas fixas da versão final apenas os atributos que apresentarem **frequência e relevância estatística comprovada** na amostragem dos 1.000 imóveis.
 
 ---
 
-## 4. Guia de Execução no Terminal
+## 3. Etapa 2: Consolidação e Replicação para Toda a Base
+
+Com o schema definitivo validado empiricamente:
+1. Aplica-se a extração em lote (`--batch-size 5`) para os 10.758 imóveis da base.
+2. Executa-se o `--merge` gerando o dataset tabular `data/interim/llm_features_normalized.csv` e a **Versão 2 do JSON do Scrap** (`data/interim/imoveis_joao_pessoa_v2.json`).
+
+---
+
+## 4. Guia de Execução
 
 ```powershell
-# 1. Executar a extração dos atributos e diferenciais exóticos para a base inteira:
+# 1. Executar a Amostragem Aberta (Etapa 1 - 1.000 imóveis):
+.\.venv\Scripts\python.exe -m imoveis_jp.processing.extract_llm_features --discover --limit 1000
+
+# 2. Executar a Replicação Final em Lote para toda a base (Etapa 2):
 .\.venv\Scripts\python.exe -m imoveis_jp.processing.extract_llm_features --batch-size 5
 
-# 2. Executar um teste com amostra de 10 imóveis:
-.\.venv\Scripts\python.exe -m imoveis_jp.processing.extract_llm_features --limit 10 --batch-size 5
-
-# 3. Exportar o resultado salvo em extractions_llm.json para CSV:
+# 3. Exportar CSV e v2 do JSON do Scrap:
 .\.venv\Scripts\python.exe -m imoveis_jp.processing.extract_llm_features --merge
 ```
