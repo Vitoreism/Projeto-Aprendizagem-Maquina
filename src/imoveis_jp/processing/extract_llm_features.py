@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-modulo de extracao via llm com texto 100% integral (sem limite de truncamento) em lote de 3 em 3 e 5 chaves api (issue #9)
+modulo de extracao via llm otimizado para alta velocidade em lote de 5 em 5 com texto 100% integral e 5 chaves api (issue #9)
 """
 
 from __future__ import annotations
@@ -31,7 +31,7 @@ COMODIDADES_HTML_IGNORAR = {
     "sala", "wc social", "1 vaga de garagem", "3 quartos", "2 quartos",
 }
 
-# prompt da etapa 1: descoberta aberta em lote
+# prompt da etapa 1: descoberta aberta em lote (batching de 5 imoveis)
 SYSTEM_PROMPT_DISCOVERY_BATCH = """Voce e um especialista em PLN e analise de dados imobiliarios.
 Sua tarefa e analisar a descricao de cada imovel e extrair TODOS os atributos, caracteristicas, diferenciais, orientacoes e condicoes comerciais citados no texto livre.
 
@@ -202,7 +202,7 @@ def construir_prompt_dinamico_batch(atributos_dinamicos: List[str]) -> str:
     lista_chaves_str = "\n".join([f'- "{at.replace(" ", "_")}": true | false (se mencionar "{at}")' for at in atributos_dinamicos])
 
     prompt = f"""Voce e um especialista em analise de dados imobiliarios em Joao Pessoa (PB).
-Sua tarefa e analisar o texto de descricoes de imoveis e extrair os seguintes atributos validados empiricamente com MAXIMA RIQUEZA E ATENCAO CIRURGICA:
+Sua tarefa e analisar o texto de descricoes de imoveis e extrair os seguintes atributos validados empiricamente:
 
 - "posicao_solar": "Nascente" | "Poente" | "Sul" | "Norte" | "Nao informado"
 - "distancia_praia_m": numero inteiro estimado de metros ate a praia ou null se nao informado
@@ -348,7 +348,7 @@ def salvar_extracoes_checkpoint(caminho: Path, dados: Dict[str, Dict[str, Any]])
 
 def executar_pipeline_extracao_llm(
     limit: Optional[int] = None,
-    batch_size: int = 3,
+    batch_size: int = 5,
     model: str = "llama-3.1-8b-instant",
     sleep_between: float = 0.3,
     dry_run: bool = False,
@@ -381,9 +381,9 @@ def executar_pipeline_extracao_llm(
 
     atributos_dinamicos = carregar_atributos_do_ranking()
 
-    print(f"[OK] Iniciando Extracao de Texto 100% Integral ({len(imoveis)} imoveis no escopo)...", flush=True)
+    print(f"[OK] Iniciando Extracao Otimizada (5 em 5 imoveis com 100% de Texto Integral) ({len(imoveis)} imoveis)...", flush=True)
     print(f"     Atributos Dinamicos Descobertos: {len(atributos_dinamicos)} atributos")
-    print(f"     Tamanho do Lote (Batching): {batch_size} imoveis por requisicao (3 em 3)")
+    print(f"     Tamanho do Lote (Batching): {batch_size} imoveis por requisicao (5 em 5)")
     print(f"     Cobertura de Texto: 100% INTEGRAL (sem nenhum limite de truncamento)")
     print(f"     Modelo selecionado: {model}")
     print(f"     Arquivo de Checkpoint: {checkpoint_file}")
@@ -496,7 +496,7 @@ def fundir_json_enriquecido_v2(atributos_dinamicos: Optional[List[str]] = None) 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Pipeline com texto 100% integral e rotacao multi-chave via Groq LLM (Issue #9)."
+        description="Pipeline otimizado de alta velocidade (5 em 5) com texto 100% integral via Groq LLM (Issue #9)."
     )
     parser.add_argument(
         "--discover",
@@ -512,8 +512,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--batch-size",
         type=int,
-        default=3,
-        help="Numero de imoveis por requisicao de lote (default: 3 imoveis/lote).",
+        default=5,
+        help="Numero de imoveis por requisicao de lote (default: 5 imoveis/lote).",
     )
     parser.add_argument(
         "--model",
