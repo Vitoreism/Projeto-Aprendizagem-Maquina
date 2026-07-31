@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 """
-modulo de extracao via llm otimizado para velocidade maxima com os 45 principais atributos do ranking mais o campo diferenciais unicos (issue #9)
+modulo de extracao via llm com suporte dinamico ilimitado a multiplas chaves groq api (issue #9)
+carrega chaves por virgula em GROQ_API_KEYS ou individuais GROQ_API_KEY_1, GROQ_API_KEY_2, etc
 """
 
 from __future__ import annotations
@@ -56,8 +57,14 @@ def carregar_clientes_groq() -> List[Any]:
         print("[Erro] A biblioteca 'groq' nao esta instalada. Execute: pip install groq", flush=True)
         sys.exit(1)
 
+    load_dotenv(override=True)
     chaves_brutas = os.environ.get("GROQ_API_KEYS", "") or os.environ.get("GROQ_API_KEY", "")
     lista_chaves = [k.strip() for k in chaves_brutas.split(",") if k.strip() and not k.strip().startswith("SUA_CHAVE")]
+
+    for env_k, env_v in os.environ.items():
+        if env_k.startswith("GROQ_API_KEY_") and env_v.strip() and not env_v.strip().startswith("SUA_CHAVE"):
+            if env_v.strip() not in lista_chaves:
+                lista_chaves.append(env_v.strip())
 
     if not lista_chaves:
         print("[Erro] Nenhuma chave valida da API Groq encontrada no arquivo .env", flush=True)
@@ -158,7 +165,6 @@ def executar_descoberta_amostral(
 
 
 def carregar_atributos_do_ranking(min_frequencia: int = 5) -> List[str]:
-    # carrega os 45 atributos mais frequentes do ranking para manter payload enxuto e velocidade maxima
     arquivo_ranking = config.INTERIM / "discovered_attributes_rank.json"
     if not arquivo_ranking.exists():
         return []
@@ -213,9 +219,11 @@ def extrair_lote_atributos_llm(
     prompt_sistema = construir_prompt_dinamico_batch(atributos_dinamicos)
     prompt_usuario = f"Lista de Imoveis para Processar:\n{json.dumps(payload_prompt, ensure_ascii=False)}"
 
-    pool_clientes = itertools.cycle(clientes)
+    # relê dinamicamente caso o usuario adicione novas chaves no .env durante a execucao
+    clientes_atualizados = carregar_clientes_groq()
+    pool_clientes = itertools.cycle(clientes_atualizados)
 
-    for attempt in range(max(max_retries, len(clientes) * 2)):
+    for attempt in range(max(max_retries, len(clientes_atualizados) * 2)):
         client = next(pool_clientes)
         try:
             response = client.chat.completions.create(
@@ -478,7 +486,7 @@ def fundir_json_enriquecido_v2(atributos_dinamicos: Optional[List[str]] = None) 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Pipeline otimizado com atributos principais e diferenciais unicos via Groq LLM (Issue #9)."
+        description="Pipeline otimizado com recarga dinamica de chaves via Groq LLM (Issue #9)."
     )
     parser.add_argument(
         "--discover",
