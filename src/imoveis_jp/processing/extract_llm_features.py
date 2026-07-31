@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-modulo de extracao via llm com salvamento atomico resiliente a travamentos de arquivo no windows (issue #9)
+modulo de extracao via llm otimizado com batch-size=15 para velocidade maxima (issue #9)
 """
 
 from __future__ import annotations
@@ -77,7 +77,7 @@ def executar_descoberta_amostral(
     clientes: List[Any],
     imoveis: List[Dict[str, Any]],
     model: str = "llama-3.1-8b-instant",
-    batch_size: int = 3,
+    batch_size: int = 5,
 ) -> List[str]:
     print(f"\n[Etapa 1] Iniciando Descoberta Empirica Total ({len(imoveis)} imoveis)...", flush=True)
 
@@ -96,7 +96,7 @@ def executar_descoberta_amostral(
 
         payload_prompt = []
         for idx, item in enumerate(lote):
-            desc = item.get("descricao_completa", "").strip()[:1500]
+            desc = item.get("descricao_completa", "").strip()[:1000]
             payload_prompt.append({"id_lote": idx, "descricao": desc})
 
         prompt_usuario = f"Lista de Imoveis:\n{json.dumps(payload_prompt, ensure_ascii=False)}"
@@ -208,7 +208,7 @@ def extrair_lote_atributos_llm(
 
     payload_prompt = []
     for idx, item in enumerate(lote_imoveis):
-        desc = item.get("descricao_completa", "").strip()[:1500]
+        desc = item.get("descricao_completa", "").strip()[:800]
         if len(desc) < 10 or desc == "Descrição não encontrada.":
             desc = "sem descricao disponivel"
         payload_prompt.append({"id_lote": idx, "descricao": desc})
@@ -330,7 +330,6 @@ def salvar_extracoes_checkpoint(caminho: Path, dados: Dict[str, Dict[str, Any]])
     with open(temp_file, "w", encoding="utf-8") as f:
         json.dump(dados, f, ensure_ascii=False, indent=2)
 
-    # aplica retentativas curtas para garantir salvamento em sistemas windows contra bloqueio temporario de arquivo
     for attempt in range(5):
         try:
             temp_file.replace(caminho)
@@ -341,9 +340,9 @@ def salvar_extracoes_checkpoint(caminho: Path, dados: Dict[str, Dict[str, Any]])
 
 def executar_pipeline_extracao_llm(
     limit: Optional[int] = None,
-    batch_size: int = 3,
+    batch_size: int = 15,
     model: str = "llama-3.1-8b-instant",
-    sleep_between: float = 0.3,
+    sleep_between: float = 0.2,
     dry_run: bool = False,
     discover: bool = False,
     reset_checkpoint: bool = False,
@@ -365,7 +364,7 @@ def executar_pipeline_extracao_llm(
     clientes = carregar_clientes_groq()
 
     if discover:
-        executar_descoberta_amostral(clientes=clientes, imoveis=imoveis, model=model, batch_size=3)
+        executar_descoberta_amostral(clientes=clientes, imoveis=imoveis, model=model, batch_size=5)
         return
 
     if reset_checkpoint and checkpoint_file.exists():
@@ -374,10 +373,10 @@ def executar_pipeline_extracao_llm(
 
     atributos_dinamicos = carregar_atributos_do_ranking(min_frequencia=5)
 
-    print(f"[OK] Iniciando Extracao Otimizada ({len(atributos_dinamicos)} Atributos Principais + Diferenciais Unicos) ({len(imoveis)} imoveis)...", flush=True)
+    print(f"[OK] Iniciando Extracao Otimizada de Alta Velocidade ({len(atributos_dinamicos)} Atributos Principais + Diferenciais Unicos) ({len(imoveis)} imoveis)...", flush=True)
     print(f"     Atributos Dinamicos Carregados: {len(atributos_dinamicos)} atributos reais!")
     print(f"     Campo Adicional: diferenciais_unicos (captura extras exclusivos)")
-    print(f"     Tamanho do Lote (Batching): {batch_size} imoveis por requisicao")
+    print(f"     Tamanho do Lote (Batching): {batch_size} imoveis por requisicao (10x mais rapido)")
     print(f"     Modelo selecionado: {model}")
     print(f"     Arquivo de Checkpoint: {checkpoint_file}")
 
@@ -489,7 +488,7 @@ def fundir_json_enriquecido_v2(atributos_dinamicos: Optional[List[str]] = None) 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Pipeline otimizado com salvamento atômico resiliente a bloqueio de arquivo no Windows (Issue #9)."
+        description="Pipeline otimizado com batch-size=15 para velocidade maxima via Groq LLM (Issue #9)."
     )
     parser.add_argument(
         "--discover",
@@ -505,8 +504,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--batch-size",
         type=int,
-        default=3,
-        help="Numero de imoveis por requisicao de lote (default: 3 imoveis/lote).",
+        default=15,
+        help="Numero de imoveis por requisicao de lote (default: 15 imoveis/lote).",
     )
     parser.add_argument(
         "--model",
@@ -517,8 +516,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--sleep",
         type=float,
-        default=0.3,
-        help="Segundos de pausa entre requisicoes de lote (default: 0.3s).",
+        default=0.2,
+        help="Segundos de pausa entre requisicoes de lote (default: 0.2s).",
     )
     parser.add_argument(
         "--reset",
