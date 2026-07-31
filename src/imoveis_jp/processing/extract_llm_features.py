@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-modulo de extracao via llm otimizado com cobertura de 1500 caracteres (cobre 90%+ do texto integral) e 5 chaves api (issue #9)
+modulo de extracao via llm com texto 100% integral (sem limite de truncamento) em lote de 3 em 3 e 5 chaves api (issue #9)
 """
 
 from __future__ import annotations
@@ -83,7 +83,7 @@ def executar_descoberta_amostral(
     model: str = "llama-3.1-8b-instant",
     batch_size: int = 5,
 ) -> List[str]:
-    print(f"\n[Etapa 1] Iniciando Descoberta Empirica com Cobertura Ampliada de 1500 Chars ({len(imoveis)} imoveis)...", flush=True)
+    print(f"\n[Etapa 1] Iniciando Descoberta Empirica com Texto 100% Integral ({len(imoveis)} imoveis)...", flush=True)
 
     contador_atributos: Counter = Counter()
     amostras_salvas = {}
@@ -100,8 +100,8 @@ def executar_descoberta_amostral(
 
         payload_prompt = []
         for idx, item in enumerate(lote):
-            # amplia a cobertura de texto para 1500 caracteres cobrindo 90%+ das descricoes integrais
-            desc = item.get("descricao_completa", "").strip()[:1500]
+            # texto 100% integral sem nenhum corte de caracteres
+            desc = item.get("descricao_completa", "").strip()
             payload_prompt.append({"id_lote": idx, "descricao": desc})
 
         prompt_usuario = f"Lista de Imoveis:\n{json.dumps(payload_prompt, ensure_ascii=False)}"
@@ -227,8 +227,8 @@ def extrair_lote_atributos_llm(
 
     payload_prompt = []
     for idx, item in enumerate(lote_imoveis):
-        # amplia a cobertura para 1500 caracteres na etapa 2
-        desc = item.get("descricao_completa", "").strip()[:1500]
+        # texto 100% integral na etapa 2 sem nenhum truncamento
+        desc = item.get("descricao_completa", "").strip()
         if len(desc) < 10 or desc == "Descrição não encontrada.":
             desc = "sem descricao disponivel"
         payload_prompt.append({"id_lote": idx, "descricao": desc})
@@ -381,10 +381,10 @@ def executar_pipeline_extracao_llm(
 
     atributos_dinamicos = carregar_atributos_do_ranking()
 
-    print(f"[OK] Iniciando Extracao de Alta Riqueza e Precisao ({len(imoveis)} imoveis no escopo)...", flush=True)
+    print(f"[OK] Iniciando Extracao de Texto 100% Integral ({len(imoveis)} imoveis no escopo)...", flush=True)
     print(f"     Atributos Dinamicos Descobertos: {len(atributos_dinamicos)} atributos")
-    print(f"     Tamanho do Lote (Batching): {batch_size} imoveis por requisicao (Max Riqueza)")
-    print(f"     Cobertura de Texto por Imovel: 1500 caracteres (90%+ do texto integral)")
+    print(f"     Tamanho do Lote (Batching): {batch_size} imoveis por requisicao (3 em 3)")
+    print(f"     Cobertura de Texto: 100% INTEGRAL (sem nenhum limite de truncamento)")
     print(f"     Modelo selecionado: {model}")
     print(f"     Arquivo de Checkpoint: {checkpoint_file}")
 
@@ -496,7 +496,7 @@ def fundir_json_enriquecido_v2(atributos_dinamicos: Optional[List[str]] = None) 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Pipeline de alta riqueza com rotacao multi-chave via Groq LLM (Issue #9)."
+        description="Pipeline com texto 100% integral e rotacao multi-chave via Groq LLM (Issue #9)."
     )
     parser.add_argument(
         "--discover",
@@ -513,7 +513,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--batch-size",
         type=int,
         default=3,
-        help="Numero de imoveis por requisicao de lote (default: 3 imoveis/lote para maxima riqueza).",
+        help="Numero de imoveis por requisicao de lote (default: 3 imoveis/lote).",
     )
     parser.add_argument(
         "--model",

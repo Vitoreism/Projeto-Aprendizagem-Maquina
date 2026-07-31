@@ -1,9 +1,9 @@
-# Documentação Técnica e Acadêmica da Issue #9: Amostragem Empírica e Otimização de Tokens via LLM
+# Documentação Técnica e Acadêmica da Issue #9: Amostragem Empírica e Rotação Multi-Chave via LLM
 
 **Autor:** Gabriel Ribeiro (`@gabrielbribeiroo`)  
 **Projeto:** Previsão e Análise de Preços de Imóveis em João Pessoa (PB)  
 **Disciplina:** Paradigmas de Aprendizagem de Máquina — UFPB  
-**Módulo:** `src/imoveis_jp/processing/extract_llm_features.py`  
+**Módulo:** `src/imoveis_jp/processing\extract_llm_features.py`  
 **Data:** 31/07/2026  
 
 ---
@@ -14,29 +14,27 @@ Para evitar decisões arbitrárias sobre quais atributos devem ser extraídos do
 
 ```mermaid
 graph TD
-    A["Base Bruta (10.758 Imóveis)"] --> B["Etapa 1: Amostragem Aberta (1.000 Imóveis)"]
+    A["Base Bruta (10.758 Imóveis)"] --> B["Etapa 1: Amostragem Aberta (1.000 Imóveis com Texto 100% Integral)"]
     B --> C["Extração Não-Engessada de Todos os Atributos Citados"]
     C --> D["Análise Estatística de Frequência e Ocorrência"]
     D --> E["Seleção do Ranking dos Atributos Reais Mais Frequentes"]
-    E --> F["Etapa 2: Construção Dinâmica do Schema e Replicação em Lote (100% da Base)"]
+    E --> F["Etapa 2: Construção Dinâmica do Schema e Replicação em Lote de 3 em 3 (100% da Base)"]
     F --> G["Geração da v2 do JSON do Scrap (imoveis_joao_pessoa_v2.json)"]
 ```
 
 ---
 
-## 2. Justificativa Técnica do Truncamento Otimizado em 600 Caracteres
+## 2. Processamento com Texto 100% Integral e Rotação Multi-Chave de API
 
-Adotou-se o **truncamento do campo `descricao_completa` nos primeiros 600 caracteres** (`desc[:600]`). A escolha dessa técnica fundamenta-se nas seguintes razões técnicas e empíricas:
+Adotou-se o envio da **`descricao_completa` 100% integral (sem nenhum limite de truncamento de texto)** em lotes de 3 em 3 imóveis (`--batch-size 3`). A escolha dessa arquitetura fundamenta-se nas seguintes razões técnicas e empíricas:
 
-### 📐 2.1 Princípio da Pirâmide Invertida e Densidade de Informação
-No marketing imobiliário, as informações mais valiosas e decisivas para precificação (*front-loading*) são concentradas no **início da descrição** (posição solar, distância da praia, fase da obra, reformado, permuta, FGTS e itens de luxo). 
+### 📐 2.1 Cobertura Textual de 100% e Máxima Riqueza
+Garante que **absolutamente nenhuma frase, parágrafo ou detalhe digitado pelos corretores seja descartado**, capturando 100% das informações de posição solar, praia, fase da obra, reformado, permuta, FGTS e diferenciais raros de luxo.
 
-O texto remanescente (após os 600 caracteres) é composto majoritariamente por *boilerplate* administrativo redundante (contatos de corretores, avisos de financiamento bancário, horário de funcionamento e registro CRECI), que não agrega valor preditivo ao modelo de Machine Learning.
-
-### ⚡ 2.2 Eficiência Computacional e Economia de 85% em Tokens
-* **Redução de Payload:** O consumo por requisição cai de ~3.500 tokens para **apenas ~400 tokens** (economia de 85% no custo computacional).
-* **Eliminação de Bottlenecks de Rate Limit (HTTP 429):** Permite manter o envio fluido sem estourar o teto de *Tokens Per Minute (TPM)* do servidor.
-* **Aceleração do Pipeline:** O tempo total de execução da amostragem cai de ~5 horas para **apenas ~6 a 10 minutos**!
+### 🔑 2.2 Rotação de Múltiplas Chaves de API (*Round-Robin*)
+Para viabilizar o envio do texto 100% integral sem sofrer bloqueios por limite de requisições:
+* **Pool de 5 Chaves de API do Groq:** A cota combinada salta de 6.000 para **30.000 Tokens por Minuto (TPM)** e **2.500.000 Tokens por Dia (TPD)**.
+* **Failover Automático sem Latência:** Em caso de eventual limite de uma chave, o script rotaciona instantaneamente para a próxima chave no pool.
 
 ---
 
@@ -59,11 +57,11 @@ O texto remanescente (após os 600 caracteres) é composto majoritariamente por 
 ## 4. Guia de Execução no Terminal
 
 ```powershell
-# 1. Executar a Amostragem Aberta (Etapa 1 - 1.000 imóveis com otimização de 600 chars):
+# 1. Executar a Amostragem Aberta com Texto Integral (Etapa 1 - 1.000 imóveis):
 .\.venv\Scripts\python.exe -m imoveis_jp.processing.extract_llm_features --discover --limit 1000
 
-# 2. Executar a Replicação em Lote para toda a base com o Schema Dinâmico (Etapa 2):
-.\.venv\Scripts\python.exe -m imoveis_jp.processing.extract_llm_features --batch-size 10
+# 2. Executar a Replicação de Alta Riqueza em Lote de 3 em 3 com o Schema Dinâmico (Etapa 2):
+.\.venv\Scripts\python.exe -m imoveis_jp.processing.extract_llm_features --batch-size 3
 
 # 3. Exportar o CSV normalizado e a v2 do JSON do Scrap:
 .\.venv\Scripts\python.exe -m imoveis_jp.processing.extract_llm_features --merge
