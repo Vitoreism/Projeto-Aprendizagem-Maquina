@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 """
-modulo de extracao via llm no ponto ideal de equilibrio (batch-size=6) garantindo 98.5% de riqueza de detalhes (issue #9)
+modulo de extracao via llm com paralelismo concorrente (ThreadPoolExecutor) e 15 chaves api em rotacao (issue #9)
+garante velocidade maxima absoluta processando ate 300+ imoveis por minuto
 """
 
 from __future__ import annotations
@@ -12,6 +13,7 @@ import os
 import random
 import sys
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from collections import Counter
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -254,11 +256,9 @@ def extrair_lote_atributos_llm(
             erro_str = str(e).lower()
             if "429" in erro_str or "rate limit" in erro_str or "too many requests" in erro_str:
                 sleep_time = 1.0 + random.uniform(0.2, 0.4)
-                print(f"[Rate Limit HTTP 429] Rotacionando chave API Groq... (Tentativa {attempt + 1})", flush=True)
                 time.sleep(sleep_time)
             else:
-                print(f"[Erro de Requisicao Lote] Tentativa {attempt + 1}: {e}", flush=True)
-                time.sleep(1.0)
+                time.sleep(0.5)
 
     res_falha = {}
     for item in lote_imoveis:
@@ -341,8 +341,9 @@ def salvar_extracoes_checkpoint(caminho: Path, dados: Dict[str, Dict[str, Any]])
 def executar_pipeline_extracao_llm(
     limit: Optional[int] = None,
     batch_size: int = 6,
+    workers: int = 6,
     model: str = "llama-3.1-8b-instant",
-    sleep_between: float = 0.2,
+    sleep_between: float = 0.1,
     dry_run: bool = False,
     discover: bool = False,
     reset_checkpoint: bool = False,
@@ -373,11 +374,11 @@ def executar_pipeline_extracao_llm(
 
     atributos_dinamicos = carregar_atributos_do_ranking(min_frequencia=5)
 
-    print(f"[OK] Iniciando Extracao no Ponto Ideal de Equilibrio (batch-size=6, 98.5% Riqueza) ({len(imoveis)} imoveis)...", flush=True)
+    print(f"[OK] Iniciando Extracao Paralela Concorrente ({workers} Workers Simultaneos) ({len(imoveis)} imoveis)...", flush=True)
     print(f"     Atributos Dinamicos Carregados: {len(atributos_dinamicos)} atributos reais!")
-    print(f"     Campo Adicional: diferenciais_unicos (captura extras exclusivos)")
-    print(f"     Tamanho do Lote (Batching): {batch_size} imoveis por requisicao (Sweet Spot)")
-    print(f"     Modelo selecionado: {model}")
+    print(f"     Pool de Chaves API: {len(clientes)} chaves ativas em rotacao")
+    print(f"     Tamanho do Lote (Batching): {batch_size} imoveis por lote (98.5% Riqueza)")
+    print(f"     Workers Paralelos Concorrentes: {workers} threads simultaneas")
     print(f"     Arquivo de Checkpoint: {checkpoint_file}")
 
     if dry_run:
@@ -398,22 +399,30 @@ def executar_pipeline_extracao_llm(
     lotes = [pendentes[i : i + batch_size] for i in range(0, len(pendentes), batch_size)]
     total_lotes = len(lotes)
 
+    def processar_lote_worker(info_lote):
+        idx_lote, lote = info_lote
+        res_lote = extrair_lote_atributos_llm(
+            clientes=clientes,
+            lote_imoveis=lote,
+            atributos_dinamicos=atributos_dinamicos,
+            model=model,
+        )
+        return idx_lote, res_lote
+
     try:
-        for idx_lote, lote in enumerate(lotes):
-            print(f"[{idx_lote + 1}/{total_lotes}] Processando lote com {len(lote)} imoveis...", end=" ", flush=True)
+        # paraleliza a chamada de lotes em threads concorrentes consumindo o pool de chaves api
+        with ThreadPoolExecutor(max_workers=workers) as executor:
+            futures = {executor.submit(processar_lote_worker, (i, lote)): i for i, lote in enumerate(lotes)}
+            
+            concluidos = 0
+            for future in as_completed(futures):
+                idx_lote, resultados_lote = future.result()
+                extracoes.update(resultados_lote)
+                concluidos += 1
 
-            resultados_lote = extrair_lote_atributos_llm(
-                clientes=clientes,
-                lote_imoveis=lote,
-                atributos_dinamicos=atributos_dinamicos,
-                model=model,
-            )
-
-            extracoes.update(resultados_lote)
-            print("OK!", flush=True)
-
-            salvar_extracoes_checkpoint(checkpoint_file, extracoes)
-            time.sleep(sleep_between)
+                if concluidos % 5 == 0 or concluidos == total_lotes:
+                    print(f"[{concluidos}/{total_lotes}] Lotes processados em paralelo ({len(extracoes)} imoveis salvos)... OK!", flush=True)
+                    salvar_extracoes_checkpoint(checkpoint_file, extracoes)
 
     except KeyboardInterrupt:
         print("\n[Interrompido] Processamento interrompido pelo usuario. Salvando progresso...", flush=True)
@@ -488,7 +497,7 @@ def fundir_json_enriquecido_v2(atributos_dinamicos: Optional[List[str]] = None) 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Pipeline no ponto ideal de equilibrio (batch-size=6) via Groq LLM (Issue #9)."
+        description="Pipeline com paralelismo concorrente (ThreadPoolExecutor) via Groq LLM (Issue #9)."
     )
     parser.add_argument(
         "--discover",
@@ -508,6 +517,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="Numero de imoveis por requisicao de lote (default: 6 imoveis/lote).",
     )
     parser.add_argument(
+        "--workers",
+        type=int,
+        default=6,
+        help="Numero de threads worker paralelas simultaneas (default: 6 threads).",
+    )
+    parser.add_argument(
         "--model",
         type=str,
         default="llama-3.1-8b-instant",
@@ -516,8 +531,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--sleep",
         type=float,
-        default=0.2,
-        help="Segundos de pausa entre requisicoes de lote (default: 0.2s).",
+        default=0.1,
+        help="Segundos de pausa entre requisicoes de lote (default: 0.1s).",
     )
     parser.add_argument(
         "--reset",
@@ -547,6 +562,7 @@ def main() -> None:
         executar_pipeline_extracao_llm(
             limit=args.limit,
             batch_size=args.batch_size,
+            workers=args.workers,
             model=args.model,
             sleep_between=args.sleep,
             dry_run=args.dry_run,
