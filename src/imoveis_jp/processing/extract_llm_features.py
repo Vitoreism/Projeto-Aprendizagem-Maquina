@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
-modulo de extracao via llm para recuperar atributos basicos ausentes no html
-como suites, quartos, banheiros, garagens, area e andar contidos na descricao (issue #9)
+modulo de extracao de atributos em texto livre e comodidades via llm (issue #9)
+baseado na analise das primeiras descricoes e marcadores do dataset
 """
 
 from __future__ import annotations
@@ -18,42 +18,55 @@ from typing import Any, Dict, List, Optional
 from dotenv import load_dotenv
 from imoveis_jp import config
 
-# le credenciais do arquivo .env
+# le credenciais salvas no arquivo .env
 load_dotenv()
 
-# prompt focado em recuperar atributos do imovel omitidos nos campos do html
-SYSTEM_PROMPT_BATCH = """Voce e um especialista em analise de dados imobiliarios.
-Sua tarefa e analisar a descricao em texto de imoveis e recuperar atributos numericos basicos do imovel que o anunciante digitou no texto.
+# prompt em lote com atributos identificados na analise das descricoes reais
+SYSTEM_PROMPT_BATCH = """Voce e um especialista em analise de dados imobiliarios em Joao Pessoa (PB).
+Sua tarefa e analisar o texto de descricoes de imoveis e extrair atributos qualitativos e numericos informados pelo anunciante.
 
 Para cada imovel recebido na lista, extraia:
-- "quartos": numero inteiro de quartos/dormitorios ou null se nao informado
-- "suites": numero inteiro de suites ou null se nao informado
-- "banheiros": numero inteiro de banheiros totais ou null se nao informado
-- "garagens": numero inteiro de vagas de garagem ou null se nao informado
-- "area_m2": numero (float/int) da area util/privativa em m2 ou null se nao informado
-- "andar": numero inteiro do andar do apartamento ou null se nao informado
-- "valor_condominio": numero (float/int) do valor da taxa de condominio em R$ ou null se nao informado
+- "posicao_solar": "Nascente" | "Poente" | "Sul" | "Norte" | "Nao informado"
+- "distancia_praia_m": numero inteiro estimado de metros ate a praia (ex: 300) ou null se nao informado
+- "status_construcao": "Na planta" | "Em construcao" | "Pronto para morar" | "Usado" | "Nao informado"
+- "tipo_unidade": "Terreo com area" | "Terreo simples" | "Cobertura" | "Duplex" | "Apartamento tipo"
+- "vista_mar": true | false
+- "beira_mar": true | false
+- "moveis_projetados": true | false
+- "reformado": true | false
+- "aceita_permuta": true | false
+- "aceita_fgts": true | false
 
 Responda ESTRITAMENTE com um objeto JSON valido contendo a chave "resultados", que e uma lista de objetos:
 {
     "resultados": [
         {
             "id_lote": 0,
-            "quartos": 3,
-            "suites": 2,
-            "banheiros": 3,
-            "garagens": 2,
-            "area_m2": 120.0,
-            "andar": 7,
-            "valor_condominio": 450.0
+            "posicao_solar": "Nascente",
+            "distancia_praia_m": 300,
+            "status_construcao": "Em construcao",
+            "tipo_unidade": "Apartamento tipo",
+            "vista_mar": true,
+            "beira_mar": false,
+            "moveis_projetados": false,
+            "reformado": false,
+            "aceita_permuta": false,
+            "aceita_fgts": false
         }
     ]
 }
 
-Regras:
-1. Retorne apenas numeros inteiros ou decimais quando explicitamente mencionados no texto
-2. Se a informação nao constar na descricao, retorne null
-3. "suites": identifique no texto expressoes como "sendo 2 suítes", "2 suítes", "1 suíte"
+Regras de Extracao:
+1. "posicao_solar": "Nascente", "Poente", "Sul" ou "Norte" apenas se explicitado. senao "Nao informado"
+2. "distancia_praia_m": extrair numeros em metros (ex: "300m da praia" -> 300) ou null
+3. "status_construcao": "Na planta", "Em construcao", "Pronto para morar" ou "Usado"
+4. "tipo_unidade": "Terreo com area" se mencionar terreo com area privativa/quintal, "Cobertura" se cobertura/duplex
+5. "vista_mar": true se mencionar vista para o mar ou vista mar
+6. "beira_mar": true se mencionar pe na areia ou beira mar
+7. "moveis_projetados": true se mencionar armarios projetados, moveis planejados ou embutidos
+8. "reformado": true se mencionar reformado ou novo
+9. "aceita_permuta": true se mencionar aceita permuta ou troca
+10. "aceita_fgts": true se mencionar permite utilizacao de FGTS
 """
 
 def extrair_lote_atributos_llm(
@@ -96,7 +109,7 @@ def extrair_lote_atributos_llm(
                 id_lote = item_res.get("id_lote")
                 if id_lote is not None and 0 <= id_lote < len(lote_imoveis):
                     url_imovel = lote_imoveis[id_lote]["url_anuncio"]
-                    mapeamento_final[url_imovel] = _sanitizar_atributos_basicos(item_res)
+                    mapeamento_final[url_imovel] = _sanitizar_resposta_lote(item_res)
 
             for idx, item in enumerate(lote_imoveis):
                 url = item["url_anuncio"]
@@ -121,43 +134,53 @@ def extrair_lote_atributos_llm(
     return res_falha
 
 
-def _sanitizar_atributos_basicos(dados: Dict[str, Any]) -> Dict[str, Any]:
-    # garante que os campos recuperados sejam numeros ou None
+def _sanitizar_resposta_lote(dados: Dict[str, Any]) -> Dict[str, Any]:
+    # valida tipos e chaves do json retornado
     res = _retornar_atributos_padrao()
-    campos_int = ["quartos", "suites", "banheiros", "garagens", "andar"]
-    campos_float = ["area_m2", "valor_condominio"]
 
-    for c in campos_int:
-        v = dados.get(c)
-        if isinstance(v, (int, float)) and v >= 0:
-            res[c] = int(v)
-        elif isinstance(v, str) and v.isdigit():
-            res[c] = int(v)
+    # distancia da praia em metros
+    dist = dados.get("distancia_praia_m")
+    if isinstance(dist, (int, float)) and dist >= 0:
+        res["distancia_praia_m"] = int(dist)
 
-    for c in campos_float:
+    # posicao solar
+    pos = str(dados.get("posicao_solar", "")).strip().title()
+    if pos in ("Nascente", "Poente", "Sul", "Norte"):
+        res["posicao_solar"] = pos
+
+    # status da construcao
+    status = str(dados.get("status_construcao", "")).strip().capitalize()
+    if status in ("Na planta", "Em construcao", "Pronto para morar", "Usado"):
+        res["status_construcao"] = status
+
+    # tipo de unidade
+    tipo = str(dados.get("tipo_unidade", "")).strip().capitalize()
+    if tipo in ("Terreo com area", "Terreo simples", "Cobertura", "Duplex", "Apartamento tipo"):
+        res["tipo_unidade"] = tipo
+
+    # booleanos
+    for c in ["vista_mar", "beira_mar", "moveis_projetados", "reformado", "aceita_permuta", "aceita_fgts"]:
         v = dados.get(c)
-        if isinstance(v, (int, float)) and v > 0:
-            res[c] = float(v)
+        if isinstance(v, bool):
+            res[c] = v
         elif isinstance(v, str):
-            try:
-                val_clean = float(v.replace(",", ".").strip())
-                if val_clean > 0:
-                    res[c] = val_clean
-            except ValueError:
-                pass
+            res[c] = v.lower() in ("true", "sim", "yes", "1")
 
     return res
 
 
 def _retornar_atributos_padrao() -> Dict[str, Any]:
     return {
-        "quartos": None,
-        "suites": None,
-        "banheiros": None,
-        "garagens": None,
-        "area_m2": None,
-        "andar": None,
-        "valor_condominio": None,
+        "posicao_solar": "Nao informado",
+        "distancia_praia_m": None,
+        "status_construcao": "Nao informado",
+        "tipo_unidade": "Apartamento tipo",
+        "vista_mar": False,
+        "beira_mar": False,
+        "moveis_projetados": False,
+        "reformado": False,
+        "aceita_permuta": False,
+        "aceita_fgts": False,
     }
 
 
@@ -200,7 +223,7 @@ def executar_pipeline_extracao_llm(
     if limit:
         imoveis = imoveis[:limit]
 
-    print(f"[OK] Iniciando Recuperacao de Atributos Omitidos no HTML via Groq ({len(imoveis)} imoveis)...")
+    print(f"[OK] Iniciando Extracao de Atributos via LLM Groq ({len(imoveis)} imoveis)...")
     print(f"     Tamanho do Lote (Batching): {batch_size} imoveis por requisicao")
     print(f"     Modelo selecionado: {model}")
     print(f"     Arquivo de Checkpoint: {checkpoint_file}")
@@ -261,7 +284,6 @@ def executar_pipeline_extracao_llm(
 
 
 def fundir_extracoes_nos_csvs_processados() -> None:
-    # le as extracoes de atributos recuperados e exporta para csv
     import pandas as pd
 
     checkpoint_file = config.EXTRACTIONS_JSON
@@ -281,15 +303,15 @@ def fundir_extracoes_nos_csvs_processados() -> None:
     df_extra.index.name = "url_anuncio"
     df_extra.reset_index(inplace=True)
 
-    caminho_saida = config.INTERIM / "llm_recovered_attributes.csv"
+    caminho_saida = config.INTERIM / "llm_features_normalized.csv"
     df_extra.to_csv(caminho_saida, index=False, encoding="utf-8")
-    print(f"[Sucesso] Atributos recuperados via LLM exportados para: {caminho_saida}")
+    print(f"[Sucesso] Atributos extraidos via LLM exportados para: {caminho_saida}")
     print(f"          Total de registros normalizados: {len(df_extra)}")
 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Recupera atributos basicos omitidos no HTML (suites, quartos, garagens, area) via Groq LLM (Issue #9)."
+        description="Extrai caracteristicas da descricao dos imoveis via Groq LLM (Issue #9)."
     )
     parser.add_argument(
         "--limit",
