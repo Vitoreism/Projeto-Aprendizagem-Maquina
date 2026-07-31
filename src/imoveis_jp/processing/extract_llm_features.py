@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 """
-modulo de extracao via llm otimizado para alta velocidade em lote de 5 em 5 com texto 100% integral e 5 chaves api (issue #9)
+modulo de extracao via llm sem nenhum filtro de palavras ou corte arbitrario de atributos (issue #9)
+extrai 100% dos atributos descobertos no ranking para posterior limpeza e dedup estatistica
 """
 
 from __future__ import annotations
@@ -22,16 +23,7 @@ from imoveis_jp import config
 # le credenciais salvas no arquivo .env
 load_dotenv()
 
-# conjunto de palavras comuns que ja existem no html deterministico
-COMODIDADES_HTML_IGNORAR = {
-    "piscina", "academia", "elevador", "portaria", "churrasqueira",
-    "salao de festas", "salao de jogos", "playground", "interfone",
-    "brinquedoteca", "espaco gourmet", "area de lazer", "quadra",
-    "cozinha", "area de servico", "vaga", "garagem", "apartamento",
-    "sala", "wc social", "1 vaga de garagem", "3 quartos", "2 quartos",
-}
-
-# prompt da etapa 1: descoberta aberta em lote (batching de 5 imoveis)
+# prompt da etapa 1: descoberta aberta em lote
 SYSTEM_PROMPT_DISCOVERY_BATCH = """Voce e um especialista em PLN e analise de dados imobiliarios.
 Sua tarefa e analisar a descricao de cada imovel e extrair TODOS os atributos, caracteristicas, diferenciais, orientacoes e condicoes comerciais citados no texto livre.
 
@@ -83,7 +75,7 @@ def executar_descoberta_amostral(
     model: str = "llama-3.1-8b-instant",
     batch_size: int = 5,
 ) -> List[str]:
-    print(f"\n[Etapa 1] Iniciando Descoberta Empirica com Texto 100% Integral ({len(imoveis)} imoveis)...", flush=True)
+    print(f"\n[Etapa 1] Iniciando Descoberta Empirica Total ({len(imoveis)} imoveis)...", flush=True)
 
     contador_atributos: Counter = Counter()
     amostras_salvas = {}
@@ -100,7 +92,6 @@ def executar_descoberta_amostral(
 
         payload_prompt = []
         for idx, item in enumerate(lote):
-            # texto 100% integral sem nenhum corte de caracteres
             desc = item.get("descricao_completa", "").strip()
             payload_prompt.append({"id_lote": idx, "descricao": desc})
 
@@ -151,7 +142,7 @@ def executar_descoberta_amostral(
         if sucesso_lote:
             resultado_ranking = {
                 "total_amostras_analisadas": len(amostras_salvas),
-                "ranking_frequencia": dict(contador_atributos.most_common(100)),
+                "ranking_frequencia": dict(contador_atributos.most_common(150)),
             }
             with open(arquivo_ranking, "w", encoding="utf-8") as f:
                 json.dump(resultado_ranking, f, ensure_ascii=False, indent=2)
@@ -162,28 +153,21 @@ def executar_descoberta_amostral(
     print("ETAPA 1 (DESCOBERTA EMPIRICA EM LOTE) CONCLUIDA COM SUCESSO!", flush=True)
     print("=" * 65, flush=True)
     print(f"Arquivo de Ranking salvo em: {arquivo_ranking}", flush=True)
-    print("TOP 20 ATRIBUTOS REAIS MAIS FREQUENTES DESCOBERTOS:", flush=True)
+    print("TOP ATRIBUTOS REAIS MAIS FREQUENTES DESCOBERTOS:", flush=True)
 
-    atributos_filtrados_relevantes = []
-    for at, count in contador_atributos.most_common(100):
-        if at not in COMODIDADES_HTML_IGNORAR:
-            atributos_filtrados_relevantes.append(at)
-            if len(atributos_filtrados_relevantes) <= 20:
-                print(f"  - {at:40s}: {count} ocorrencias", flush=True)
+    atributos_relevantes = [at for at, count in contador_atributos.most_common(60) if len(at) > 2]
+    for at in atributos_relevantes[:20]:
+        print(f"  - {at:40s}: {contador_atributos[at]} ocorrencias", flush=True)
 
     print("=" * 65, flush=True)
-    return atributos_filtrados_relevantes[:25]
+    return atributos_relevantes
 
 
-def carregar_atributos_do_ranking() -> List[str]:
+def carregar_atributos_do_ranking(min_frequencia: int = 5) -> List[str]:
+    # carrega 100% dos atributos descobertos sem nenhum filtro ou bloqueio de palavras
     arquivo_ranking = config.INTERIM / "discovered_attributes_rank.json"
     if not arquivo_ranking.exists():
-        return [
-            "aceita fgts", "aceita permuta", "automacao residencial",
-            "distancia praia", "piscina privativa", "posicao solar nascente",
-            "posicao solar sul", "terreo com area privativa", "vista mar",
-            "beira mar", "moveis planejados", "reformado", "jacuzzi", "solario"
-        ]
+        return []
 
     with open(arquivo_ranking, "r", encoding="utf-8") as f:
         dados = json.load(f)
@@ -191,10 +175,9 @@ def carregar_atributos_do_ranking() -> List[str]:
     ranking = dados.get("ranking_frequencia", {})
     atributos_validos = []
     for at, count in ranking.items():
-        if at not in COMODIDADES_HTML_IGNORAR and len(at) > 2:
-            atributos_validos.append(at)
-            if len(atributos_validos) >= 25:
-                break
+        if isinstance(at, str) and len(at.strip()) > 2 and count >= min_frequencia:
+            atributos_validos.append(at.strip())
+
     return atributos_validos
 
 
@@ -227,7 +210,6 @@ def extrair_lote_atributos_llm(
 
     payload_prompt = []
     for idx, item in enumerate(lote_imoveis):
-        # texto 100% integral na etapa 2 sem nenhum truncamento
         desc = item.get("descricao_completa", "").strip()
         if len(desc) < 10 or desc == "Descrição não encontrada.":
             desc = "sem descricao disponivel"
@@ -379,12 +361,12 @@ def executar_pipeline_extracao_llm(
         print("[Reset] Apagando checkpoint antigo para rodar o novo schema dinamico limpo...", flush=True)
         checkpoint_file.unlink()
 
-    atributos_dinamicos = carregar_atributos_do_ranking()
+    atributos_dinamicos = carregar_atributos_do_ranking(min_frequencia=5)
 
-    print(f"[OK] Iniciando Extracao Otimizada (5 em 5 imoveis com 100% de Texto Integral) ({len(imoveis)} imoveis)...", flush=True)
-    print(f"     Atributos Dinamicos Descobertos: {len(atributos_dinamicos)} atributos")
-    print(f"     Tamanho do Lote (Batching): {batch_size} imoveis por requisicao (5 em 5)")
-    print(f"     Cobertura de Texto: 100% INTEGRAL (sem nenhum limite de truncamento)")
+    print(f"[OK] Iniciando Extracao Completa sem Filtros ({len(imoveis)} imoveis)...", flush=True)
+    print(f"     Atributos Dinamicos Carregados do Ranking: {len(atributos_dinamicos)} atributos reais!")
+    print(f"     Tamanho do Lote (Batching): {batch_size} imoveis por requisicao")
+    print(f"     Cobertura de Texto: 100% INTEGRAL")
     print(f"     Modelo selecionado: {model}")
     print(f"     Arquivo de Checkpoint: {checkpoint_file}")
 
@@ -474,7 +456,7 @@ def fundir_json_enriquecido_v2(atributos_dinamicos: Optional[List[str]] = None) 
         extracoes = json.load(f)
 
     if not atributos_dinamicos:
-        atributos_dinamicos = carregar_atributos_do_ranking()
+        atributos_dinamicos = carregar_atributos_do_ranking(min_frequencia=5)
 
     imoveis_v2 = []
     for item in imoveis_originais:
@@ -496,7 +478,7 @@ def fundir_json_enriquecido_v2(atributos_dinamicos: Optional[List[str]] = None) 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Pipeline otimizado de alta velocidade (5 em 5) com texto 100% integral via Groq LLM (Issue #9)."
+        description="Pipeline sem filtros arbitrarios via Groq LLM (Issue #9)."
     )
     parser.add_argument(
         "--discover",
