@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
-modulo de extracao via llm com suporte a amostragem aberta (descoberta empirica de atributos)
-e aplicacao em lote para toda a base de imoveis (issue #9)
+modulo de extracao via llm para capturar atributos estruturados e lista dinamica
+de diferenciais do imovel contidos na descricao em texto (issue #9)
 """
 
 from __future__ import annotations
@@ -21,14 +21,6 @@ from imoveis_jp import config
 
 # le credenciais salvas no arquivo .env
 load_dotenv()
-
-# lista de comodidades padrao que ja existem no html deterministico e devem ser ignoradas no diferenciais_unicos
-COMODIDADES_PADRAO_IGNORAR = {
-    "piscina", "academia", "elevador", "portaria", "churrasqueira",
-    "salao de festas", "salao de jogos", "playground", "interfone",
-    "brinquedoteca", "espaco gourmet", "area de lazer", "quadra",
-    "gerador", "vaga", "garagem", "cozinha", "area de servico",
-}
 
 # prompt da etapa 1: descoberta aberta de atributos em amostra de 1000 imoveis
 SYSTEM_PROMPT_DISCOVERY = """Voce e um especialista em PLN e analise de dados imobiliarios.
@@ -55,9 +47,9 @@ Regras:
 2. Evite incluir frases longas, use termos curtos e padronizados em minusculo
 """
 
-# prompt da etapa 2: aplicacao estruturada em lote baseada na descoberta
+# prompt da etapa 2: aplicacao estruturada em lote capturando todos os diferenciais
 SYSTEM_PROMPT_BATCH = """Voce e um especialista em analise de dados imobiliarios em Joao Pessoa (PB).
-Sua tarefa e analisar o texto de descricoes de imoveis e extrair atributos estruturados e uma lista dinamica de diferenciais raros/exoticos.
+Sua tarefa e analisar o texto de descricoes de imoveis e extrair atributos estruturados e uma lista dinamica de diferenciais citados.
 
 Para cada imovel recebido na lista, extraia:
 - "posicao_solar": "Nascente" | "Poente" | "Sul" | "Norte" | "Nao informado"
@@ -70,9 +62,7 @@ Para cada imovel recebido na lista, extraia:
 - "reformado": true | false
 - "aceita_permuta": true | false
 - "aceita_fgts": true | false
-- "diferenciais_unicos": lista de strings com diferenciais raros ou exoticos do imovel (ex: ["pe direito duplo", "automacao residencial", "piscina privativa na varanda", "painel solar", "adega climatizada", "tomada carro eletrico", "solario", "jacuzzi"]).
-
-ATENCAO: NAO INCLUA comodidades padrao do html (como piscina, academia, elevador, portaria, salao de festas). Extraia APENAS diferenciais raros ou exoticos do imovel.
+- "diferenciais_unicos": lista de strings com todos os diferenciais, recursos ou atributos citados no texto (ex: ["pe direito duplo", "automacao residencial", "piscina privativa", "painel solar", "adega climatizada", "tomada carro eletrico", "solario", "jacuzzi"]).
 
 Responda ESTRITAMENTE com um objeto JSON valido contendo a chave "resultados", que e uma lista de objetos:
 {
@@ -256,16 +246,12 @@ def _sanitizar_resposta_lote(dados: Dict[str, Any]) -> Dict[str, Any]:
         elif isinstance(v, str):
             res[c] = v.lower() in ("true", "sim", "yes", "1")
 
-    # diferenciais exoticos
+    # diferenciais sem nenhum filtro arbitrario para preservar 100% dos atributos extraidos da descricao
     dif = dados.get("diferenciais_unicos")
     if isinstance(dif, list):
-        filtrados = []
-        for x in dif:
-            if isinstance(x, str):
-                item_clean = x.strip().lower()
-                if len(item_clean) > 2 and not any(padrao in item_clean for padrao in COMODIDADES_PADRAO_IGNORAR):
-                    filtrados.append(item_clean)
-        res["diferenciais_unicos"] = filtrados
+        res["diferenciais_unicos"] = [str(x).strip().lower() for x in dif if isinstance(x, str) and len(str(x).strip()) > 2]
+    elif isinstance(dif, str) and len(dif.strip()) > 2:
+        res["diferenciais_unicos"] = [dif.strip().lower()]
 
     return res
 
@@ -342,7 +328,7 @@ def executar_pipeline_extracao_llm(
         executar_descoberta_amostral(client=client, imoveis=imoveis, model=model)
         return
 
-    print(f"[OK] Iniciando Extracao de Alta Precisao via Groq ({len(imoveis)} imoveis)...")
+    print(f"[OK] Iniciando Extracao Completa sem Filtros via Groq ({len(imoveis)} imoveis)...")
     print(f"     Tamanho do Lote (Batching): {batch_size} imoveis por requisicao")
     print(f"     Modelo selecionado: {model}")
     print(f"     Arquivo de Checkpoint: {checkpoint_file}")
@@ -478,7 +464,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--batch-size",
         type=int,
         default=3,
-        help="Numero de imoveis por requisicao de lote (default: 3 imoveis/lote para máxima precisao).",
+        help="Numero de imoveis por requisicao de lote (default: 3 imoveis/lote para maxima precisao).",
     )
     parser.add_argument(
         "--model",
