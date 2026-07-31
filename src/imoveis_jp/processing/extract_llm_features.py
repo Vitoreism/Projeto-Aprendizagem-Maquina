@@ -324,8 +324,44 @@ def fundir_extracoes_nos_csvs_processados() -> None:
 
     caminho_saida = config.INTERIM / "llm_features_normalized.csv"
     df_extra.to_csv(caminho_saida, index=False, encoding="utf-8")
-    print(f"[Sucesso] Atributos extraidos via LLM exportados para: {caminho_saida}")
+    print(f"[Sucesso] Atributos extraidos via LLM exportados para CSV: {caminho_saida}")
     print(f"          Total de registros normalizados: {len(df_extra)}")
+
+    # tambem gera o json v2 no mesmo formato da lista do scrap original
+    fundir_json_enriquecido_v2()
+
+
+def fundir_json_enriquecido_v2() -> None:
+    # cria a v2 do json do scrap unindo os campos originais com os atributos extraidos via llm
+    input_file = config.ANUNCIOS_JSON
+    checkpoint_file = config.EXTRACTIONS_JSON
+    output_json = config.INTERIM / "imoveis_joao_pessoa_v2.json"
+
+    if not input_file.exists() or not checkpoint_file.exists():
+        return
+
+    with open(input_file, "r", encoding="utf-8") as f:
+        imoveis_originais = json.load(f)
+
+    with open(checkpoint_file, "r", encoding="utf-8") as f:
+        extracoes = json.load(f)
+
+    imoveis_v2 = []
+    for item in imoveis_originais:
+        url = item.get("url_anuncio")
+        copia_item = dict(item)
+
+        if url and url in extracoes:
+            copia_item.update(extracoes[url])
+        else:
+            copia_item.update(_retornar_atributos_padrao())
+
+        imoveis_v2.append(copia_item)
+
+    with open(output_json, "w", encoding="utf-8") as f:
+        json.dump(imoveis_v2, f, ensure_ascii=False, indent=2)
+
+    print(f"[Sucesso] JSON v2 do Scrap (enriquecido com LLM) salvo em: {output_json}")
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -364,7 +400,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--merge",
         action="store_true",
-        help="Exporta os resultados salvos em extractions_llm.json para CSV.",
+        help="Exporta os resultados salvos em extractions_llm.json para CSV e imoveis_joao_pessoa_v2.json.",
     )
     return parser
 
