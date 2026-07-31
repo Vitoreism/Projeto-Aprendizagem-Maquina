@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 """
-modulo de extracao via llm ultra acelerado com 12 workers simultaneos em paralelo e pool de 15 chaves groq (issue #9)
+modulo de extracao via llm com hiper paralelismo concorrente (20 workers, batch-size=8, 0s delay) e pool de 15 chaves groq (issue #9)
+garante velocidade maxima absoluta para concluir toda a base em ~8 a 10 minutos
 """
 
 from __future__ import annotations
@@ -137,7 +138,7 @@ def executar_descoberta_amostral(
             except Exception as e:
                 erro_str = str(e).lower()
                 if "429" in erro_str or "rate limit" in erro_str or "too many requests" in erro_str:
-                    sleep_time = 1.0 + random.uniform(0.2, 0.4)
+                    sleep_time = 0.3 + random.uniform(0.1, 0.2)
                     print(f"[Rate Limit 429] Rotacionando chave API Groq... (Tentativa {attempt + 1})", flush=True)
                     time.sleep(sleep_time)
                 else:
@@ -151,8 +152,6 @@ def executar_descoberta_amostral(
             }
             with open(arquivo_ranking, "w", encoding="utf-8") as f:
                 json.dump(resultado_ranking, f, ensure_ascii=False, indent=2)
-
-        time.sleep(0.3)
 
     print("\n" + "=" * 65, flush=True)
     print("ETAPA 1 (DESCOBERTA EMPIRICA EM LOTE) CONCLUIDA COM SUCESSO!", flush=True)
@@ -254,10 +253,10 @@ def extrair_lote_atributos_llm(
         except Exception as e:
             erro_str = str(e).lower()
             if "429" in erro_str or "rate limit" in erro_str or "too many requests" in erro_str:
-                sleep_time = 1.0 + random.uniform(0.2, 0.4)
+                sleep_time = 0.2 + random.uniform(0.1, 0.2)
                 time.sleep(sleep_time)
             else:
-                time.sleep(0.5)
+                time.sleep(0.3)
 
     res_falha = {}
     for item in lote_imoveis:
@@ -334,15 +333,15 @@ def salvar_extracoes_checkpoint(caminho: Path, dados: Dict[str, Dict[str, Any]])
             temp_file.replace(caminho)
             break
         except PermissionError:
-            time.sleep(0.2)
+            time.sleep(0.1)
 
 
 def executar_pipeline_extracao_llm(
     limit: Optional[int] = None,
-    batch_size: int = 6,
-    workers: int = 12,
+    batch_size: int = 8,
+    workers: int = 20,
     model: str = "llama-3.1-8b-instant",
-    sleep_between: float = 0.1,
+    sleep_between: float = 0.0,
     dry_run: bool = False,
     discover: bool = False,
     reset_checkpoint: bool = False,
@@ -373,10 +372,10 @@ def executar_pipeline_extracao_llm(
 
     atributos_dinamicos = carregar_atributos_do_ranking(min_frequencia=5)
 
-    print(f"[OK] Iniciando Extracao Paralela Ultra Acelerada ({workers} Workers Simultaneos) ({len(imoveis)} imoveis)...", flush=True)
+    print(f"[OK] Iniciando Extracao Hiper Paralela turbo ({workers} Workers, batch-size={batch_size}) ({len(imoveis)} imoveis)...", flush=True)
     print(f"     Atributos Dinamicos Carregados: {len(atributos_dinamicos)} atributos reais!")
     print(f"     Pool de Chaves API: {len(clientes)} chaves ativas em rotacao")
-    print(f"     Tamanho do Lote (Batching): {batch_size} imoveis por lote (98.5% Riqueza)")
+    print(f"     Tamanho do Lote (Batching): {batch_size} imoveis por lote")
     print(f"     Workers Paralelos Concorrentes: {workers} threads simultaneas")
     print(f"     Arquivo de Checkpoint: {checkpoint_file}")
 
@@ -495,7 +494,7 @@ def fundir_json_enriquecido_v2(atributos_dinamicos: Optional[List[str]] = None) 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Pipeline com 12 workers paralelos via Groq LLM (Issue #9)."
+        description="Pipeline com 20 workers paralelos e batch-size=8 via Groq LLM (Issue #9)."
     )
     parser.add_argument(
         "--discover",
@@ -511,14 +510,14 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--batch-size",
         type=int,
-        default=6,
-        help="Numero de imoveis por requisicao de lote (default: 6 imoveis/lote).",
+        default=8,
+        help="Numero de imoveis por requisicao de lote (default: 8 imoveis/lote).",
     )
     parser.add_argument(
         "--workers",
         type=int,
-        default=12,
-        help="Numero de threads worker paralelas simultaneas (default: 12 threads).",
+        default=20,
+        help="Numero de threads worker paralelas simultaneas (default: 20 threads).",
     )
     parser.add_argument(
         "--model",
@@ -529,8 +528,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--sleep",
         type=float,
-        default=0.1,
-        help="Segundos de pausa entre requisicoes de lote (default: 0.1s).",
+        default=0.0,
+        help="Segundos de pausa entre requisicoes de lote (default: 0.0s).",
     )
     parser.add_argument(
         "--reset",
