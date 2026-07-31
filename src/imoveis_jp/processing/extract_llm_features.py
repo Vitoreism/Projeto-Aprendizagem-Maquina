@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-modulo de extracao via llm com suporte a rotacao automatica de multiplas chaves api do groq (issue #9)
-garante maxima velocidade e resiliencia eliminando bloqueios por rate limit (http 429)
+modulo de extracao via llm otimizado para maxima riqueza com batch-size=3 e 5 chaves api em rotacao (issue #9)
 """
 
 from __future__ import annotations
@@ -60,7 +59,6 @@ Responda ESTRITAMENTE com um objeto JSON valido contendo a chave "resultados":
 """
 
 def carregar_clientes_groq() -> List[Any]:
-    # le multiplas chaves de api do arquivo .env com suporte a rotacao round-robin
     try:
         from groq import Groq
     except ImportError:
@@ -142,7 +140,7 @@ def executar_descoberta_amostral(
             except Exception as e:
                 erro_str = str(e).lower()
                 if "429" in erro_str or "rate limit" in erro_str or "too many requests" in erro_str:
-                    sleep_time = 1.5 + random.uniform(0.2, 0.5)
+                    sleep_time = 1.0 + random.uniform(0.2, 0.4)
                     print(f"[Rate Limit 429] Rotacionando chave API Groq... (Tentativa {attempt + 1})", flush=True)
                     time.sleep(sleep_time)
                 else:
@@ -157,7 +155,7 @@ def executar_descoberta_amostral(
             with open(arquivo_ranking, "w", encoding="utf-8") as f:
                 json.dump(resultado_ranking, f, ensure_ascii=False, indent=2)
 
-        time.sleep(0.5)
+        time.sleep(0.3)
 
     print("\n" + "=" * 65, flush=True)
     print("ETAPA 1 (DESCOBERTA EMPIRICA EM LOTE) CONCLUIDA COM SUCESSO!", flush=True)
@@ -203,7 +201,7 @@ def construir_prompt_dinamico_batch(atributos_dinamicos: List[str]) -> str:
     lista_chaves_str = "\n".join([f'- "{at.replace(" ", "_")}": true | false (se mencionar "{at}")' for at in atributos_dinamicos])
 
     prompt = f"""Voce e um especialista em analise de dados imobiliarios em Joao Pessoa (PB).
-Sua tarefa e analisar o texto de descricoes de imoveis e extrair os seguintes atributos validados empiricamente:
+Sua tarefa e analisar o texto de descricoes de imoveis e extrair os seguintes atributos validados empiricamente com MAXIMA RIQUEZA E ATENCAO CIRURGICA:
 
 - "posicao_solar": "Nascente" | "Poente" | "Sul" | "Norte" | "Nao informado"
 - "distancia_praia_m": numero inteiro estimado de metros ate a praia ou null se nao informado
@@ -272,7 +270,7 @@ def extrair_lote_atributos_llm(
         except Exception as e:
             erro_str = str(e).lower()
             if "429" in erro_str or "rate limit" in erro_str or "too many requests" in erro_str:
-                sleep_time = 1.5 + random.uniform(0.2, 0.5)
+                sleep_time = 1.0 + random.uniform(0.2, 0.4)
                 print(f"[Rate Limit HTTP 429] Rotacionando chave API Groq... (Tentativa {attempt + 1})", flush=True)
                 time.sleep(sleep_time)
             else:
@@ -348,9 +346,9 @@ def salvar_extracoes_checkpoint(caminho: Path, dados: Dict[str, Dict[str, Any]])
 
 def executar_pipeline_extracao_llm(
     limit: Optional[int] = None,
-    batch_size: int = 10,
+    batch_size: int = 3,
     model: str = "llama-3.1-8b-instant",
-    sleep_between: float = 0.5,
+    sleep_between: float = 0.3,
     dry_run: bool = False,
     discover: bool = False,
     reset_checkpoint: bool = False,
@@ -381,11 +379,11 @@ def executar_pipeline_extracao_llm(
 
     atributos_dinamicos = carregar_atributos_do_ranking()
 
-    print(f"[OK] Iniciando Extracao Otimizada com Rotacao Multi-Chave ({len(imoveis)} imoveis no escopo)...", flush=True)
-    print(f"     Atributos Dinamicos Descobertos: {len(atributos_dinamicos)} atributos", flush=True)
-    print(f"     Tamanho do Lote (Batching): {batch_size} imoveis por requisicao", flush=True)
-    print(f"     Modelo selecionado: {model}", flush=True)
-    print(f"     Arquivo de Checkpoint: {checkpoint_file}", flush=True)
+    print(f"[OK] Iniciando Extracao de Alta Riqueza e Precisao ({len(imoveis)} imoveis no escopo)...", flush=True)
+    print(f"     Atributos Dinamicos Descobertos: {len(atributos_dinamicos)} atributos")
+    print(f"     Tamanho do Lote (Batching): {batch_size} imoveis por requisicao (Max Riqueza)")
+    print(f"     Modelo selecionado: {model}")
+    print(f"     Arquivo de Checkpoint: {checkpoint_file}")
 
     if dry_run:
         print("[DRY-RUN] Modo --dry-run ativado. Nenhuma chamada de API sera realizada.", flush=True)
@@ -495,7 +493,7 @@ def fundir_json_enriquecido_v2(atributos_dinamicos: Optional[List[str]] = None) 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Pipeline otimizado com rotacao multi-chave via Groq LLM (Issue #9)."
+        description="Pipeline de alta riqueza com rotacao multi-chave via Groq LLM (Issue #9)."
     )
     parser.add_argument(
         "--discover",
@@ -511,8 +509,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--batch-size",
         type=int,
-        default=10,
-        help="Numero de imoveis por requisicao de lote (default: 10 imoveis/lote).",
+        default=3,
+        help="Numero de imoveis por requisicao de lote (default: 3 imoveis/lote para maxima riqueza).",
     )
     parser.add_argument(
         "--model",
@@ -523,8 +521,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--sleep",
         type=float,
-        default=0.5,
-        help="Segundos de pausa entre requisicoes de lote (default: 0.5s).",
+        default=0.3,
+        help="Segundos de pausa entre requisicoes de lote (default: 0.3s).",
     )
     parser.add_argument(
         "--reset",
