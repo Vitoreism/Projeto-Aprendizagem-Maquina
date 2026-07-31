@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
-modulo de integracao com a api do groq para extracao de atributos
-em texto livre via lote (batching) para rodar a base inteira no mesmo dia (issue #9)
+modulo de extracao via llm para recuperar atributos basicos ausentes no html
+como suites, quartos, banheiros, garagens, area e andar contidos na descricao (issue #9)
 """
 
 from __future__ import annotations
@@ -18,61 +18,42 @@ from typing import Any, Dict, List, Optional
 from dotenv import load_dotenv
 from imoveis_jp import config
 
-# le credenciais salvas no arquivo .env
+# le credenciais do arquivo .env
 load_dotenv()
 
-# prompt em lote enviando uma lista de imoveis e exigindo um json de resultados por id
-SYSTEM_PROMPT_BATCH = """Voce e um especialista em analise de dados imobiliarios em Joao Pessoa (PB).
-Sua tarefa e analisar uma lista de descricoes de imoveis e extrair os atributos de cada um.
+# prompt focado em recuperar atributos do imovel omitidos nos campos do html
+SYSTEM_PROMPT_BATCH = """Voce e um especialista em analise de dados imobiliarios.
+Sua tarefa e analisar a descricao em texto de imoveis e recuperar atributos numericos basicos do imovel que o anunciante digitou no texto.
 
-Para cada imovel recebido na lista, extraia as seguintes chaves:
-- "posicao_solar": "Nascente" | "Poente" | "Sul" | "Norte" | "Nao informado"
-- "vista_mar": true | false
-- "beira_mar": true | false
-- "varanda_gourmet": true | false
-- "piso_porcelanato": true | false
-- "moveis_projetados": true | false
-- "andar_alto": true | false
-- "reformado": true | false
-- "aceita_permuta": true | false
-- "aceita_financiamento": true | false
-- "ar_condicionado": true | false
-- "area_lazer_privativa": true | false
+Para cada imovel recebido na lista, extraia:
+- "quartos": numero inteiro de quartos/dormitorios ou null se nao informado
+- "suites": numero inteiro de suites ou null se nao informado
+- "banheiros": numero inteiro de banheiros totais ou null se nao informado
+- "garagens": numero inteiro de vagas de garagem ou null se nao informado
+- "area_m2": numero (float/int) da area util/privativa em m2 ou null se nao informado
+- "andar": numero inteiro do andar do apartamento ou null se nao informado
+- "valor_condominio": numero (float/int) do valor da taxa de condominio em R$ ou null se nao informado
 
 Responda ESTRITAMENTE com um objeto JSON valido contendo a chave "resultados", que e uma lista de objetos:
 {
     "resultados": [
         {
             "id_lote": 0,
-            "posicao_solar": "Nascente",
-            "vista_mar": true,
-            "beira_mar": false,
-            "varanda_gourmet": true,
-            "piso_porcelanato": false,
-            "moveis_projetados": true,
-            "andar_alto": true,
-            "reformado": false,
-            "aceita_permuta": false,
-            "aceita_financiamento": false,
-            "ar_condicionado": true,
-            "area_lazer_privativa": true
+            "quartos": 3,
+            "suites": 2,
+            "banheiros": 3,
+            "garagens": 2,
+            "area_m2": 120.0,
+            "andar": 7,
+            "valor_condominio": 450.0
         }
     ]
 }
 
 Regras:
-1. "posicao_solar": "Nascente", "Poente", "Sul" ou "Norte" apenas se explicitado. senao "Nao informado".
-2. "vista_mar": true se mencionar vista para o mar ou vista mar.
-3. "beira_mar": true se for na av beira mar ou pe na areia.
-4. "varanda_gourmet": true se mencionar varanda ou sacada gourmet.
-5. "piso_porcelanato": true se mencionar porcelanato.
-6. "moveis_projetados": true se mencionar armarios projetados ou moveis planejados.
-7. "andar_alto": true se mencionar andar alto ou cobertura.
-8. "reformado": true se mencionar reformado ou novo/pronto para morar.
-9. "aceita_permuta": true se mencionar aceita permuta ou troca.
-10. "aceita_financiamento": true se mencionar aceita financiamento.
-11. "ar_condicionado": true se mencionar ar condicionado ou split.
-12. "area_lazer_privativa": true se tiver piscina ou churrasqueira privativa.
+1. Retorne apenas numeros inteiros ou decimais quando explicitamente mencionados no texto
+2. Se a informação nao constar na descricao, retorne null
+3. "suites": identifique no texto expressoes como "sendo 2 suítes", "2 suítes", "1 suíte"
 """
 
 def extrair_lote_atributos_llm(
@@ -81,11 +62,9 @@ def extrair_lote_atributos_llm(
     model: str = "llama-3.1-8b-instant",
     max_retries: int = 5,
 ) -> Dict[str, Dict[str, Any]]:
-    # se o lote estiver vazio nao faz chamada
     if not lote_imoveis:
         return {}
 
-    # prepara a lista de descricoes para o prompt em lote
     payload_prompt = []
     for idx, item in enumerate(lote_imoveis):
         desc = item.get("descricao_completa", "").strip()
@@ -112,15 +91,13 @@ def extrair_lote_atributos_llm(
             dados_json = json.loads(conteudo_resposta)
             lista_resultados = dados_json.get("resultados", [])
 
-            # maapeia os resultados de volta para a url do imovel
             mapeamento_final = {}
             for item_res in lista_resultados:
                 id_lote = item_res.get("id_lote")
                 if id_lote is not None and 0 <= id_lote < len(lote_imoveis):
                     url_imovel = lote_imoveis[id_lote]["url_anuncio"]
-                    mapeamento_final[url_imovel] = _validar_e_sanitizar_resposta(item_res)
+                    mapeamento_final[url_imovel] = _sanitizar_atributos_basicos(item_res)
 
-            # garante que todos os imoveis do lote tenham resultado mesmo se a llm omitir um id
             for idx, item in enumerate(lote_imoveis):
                 url = item["url_anuncio"]
                 if url not in mapeamento_final:
@@ -130,7 +107,6 @@ def extrair_lote_atributos_llm(
 
         except Exception as e:
             erro_str = str(e).lower()
-            # trata estouro de cota (429) com exponential backoff + jitter
             if "429" in erro_str or "rate limit" in erro_str or "too many requests" in erro_str:
                 sleep_time = (base_delay * (2 ** attempt)) + random.uniform(0.5, 1.5)
                 print(f"[Rate Limit HTTP 429] Lote tentativa {attempt + 1}/{max_retries}. Aguardando {sleep_time:.1f}s...")
@@ -139,53 +115,53 @@ def extrair_lote_atributos_llm(
                 print(f"[Erro de Requisicao Lote] Tentativa {attempt + 1}: {e}")
                 time.sleep(1.0)
 
-    print(f"[FALHA] Apos {max_retries} tentativas na extracao do lote.")
     res_falha = {}
     for item in lote_imoveis:
         res_falha[item["url_anuncio"]] = _retornar_atributos_padrao()
     return res_falha
 
 
-def _validar_e_sanitizar_resposta(dados: Dict[str, Any]) -> Dict[str, Any]:
-    # garante que o json retornado contem exatamente as chaves e tipos esperados
-    padrao = _retornar_atributos_padrao()
-    for chave in padrao:
-        if chave in dados:
-            if isinstance(padrao[chave], bool):
-                val = dados[chave]
-                if isinstance(val, bool):
-                    padrao[chave] = val
-                elif isinstance(val, str):
-                    padrao[chave] = val.lower() in ("true", "sim", "yes", "1")
-            elif chave == "posicao_solar":
-                val_str = str(dados[chave]).strip().title()
-                if val_str in ("Nascente", "Poente", "Sul", "Norte"):
-                    padrao[chave] = val_str
-                else:
-                    padrao[chave] = "Nao informado"
-    return padrao
+def _sanitizar_atributos_basicos(dados: Dict[str, Any]) -> Dict[str, Any]:
+    # garante que os campos recuperados sejam numeros ou None
+    res = _retornar_atributos_padrao()
+    campos_int = ["quartos", "suites", "banheiros", "garagens", "andar"]
+    campos_float = ["area_m2", "valor_condominio"]
+
+    for c in campos_int:
+        v = dados.get(c)
+        if isinstance(v, (int, float)) and v >= 0:
+            res[c] = int(v)
+        elif isinstance(v, str) and v.isdigit():
+            res[c] = int(v)
+
+    for c in campos_float:
+        v = dados.get(c)
+        if isinstance(v, (int, float)) and v > 0:
+            res[c] = float(v)
+        elif isinstance(v, str):
+            try:
+                val_clean = float(v.replace(",", ".").strip())
+                if val_clean > 0:
+                    res[c] = val_clean
+            except ValueError:
+                pass
+
+    return res
 
 
 def _retornar_atributos_padrao() -> Dict[str, Any]:
-    # dicionario com valores default em caso de falha ou ausencia
     return {
-        "posicao_solar": "Nao informado",
-        "vista_mar": False,
-        "beira_mar": False,
-        "varanda_gourmet": False,
-        "piso_porcelanato": False,
-        "moveis_projetados": False,
-        "andar_alto": False,
-        "reformado": False,
-        "aceita_permuta": False,
-        "aceita_financiamento": False,
-        "ar_condicionado": False,
-        "area_lazer_privativa": False,
+        "quartos": None,
+        "suites": None,
+        "banheiros": None,
+        "garagens": None,
+        "area_m2": None,
+        "andar": None,
+        "valor_condominio": None,
     }
 
 
 def carregar_extracoes_existentes(caminho: Path) -> Dict[str, Dict[str, Any]]:
-    # le o arquivo de checkpoint salvo em data/interim/
     if caminho.exists():
         try:
             with open(caminho, "r", encoding="utf-8") as f:
@@ -196,7 +172,6 @@ def carregar_extracoes_existentes(caminho: Path) -> Dict[str, Dict[str, Any]]:
 
 
 def salvar_extracoes_checkpoint(caminho: Path, dados: Dict[str, Dict[str, Any]]) -> None:
-    # gravacao atomica em arquivo temporario para nao corromper o json se o processo for interrompido
     caminho.parent.mkdir(parents=True, exist_ok=True)
     temp_file = caminho.with_suffix(".tmp")
     with open(temp_file, "w", encoding="utf-8") as f:
@@ -225,7 +200,7 @@ def executar_pipeline_extracao_llm(
     if limit:
         imoveis = imoveis[:limit]
 
-    print(f"[OK] Iniciando Pipeline Lote via Groq ({len(imoveis)} imoveis no escopo)...")
+    print(f"[OK] Iniciando Recuperacao de Atributos Omitidos no HTML via Groq ({len(imoveis)} imoveis)...")
     print(f"     Tamanho do Lote (Batching): {batch_size} imoveis por requisicao")
     print(f"     Modelo selecionado: {model}")
     print(f"     Arquivo de Checkpoint: {checkpoint_file}")
@@ -250,7 +225,6 @@ def executar_pipeline_extracao_llm(
     extracoes = carregar_extracoes_existentes(checkpoint_file)
     print(f"[Checkpoint] Extracoes previamente salvas: {len(extracoes)}")
 
-    # filtra imoveis pendentes de processamento
     pendentes = [item for item in imoveis if item.get("url_anuncio") and item.get("url_anuncio") not in extracoes]
     print(f"[Pendentes] Imoveis restantes a processar: {len(pendentes)}")
 
@@ -258,7 +232,6 @@ def executar_pipeline_extracao_llm(
         print("[Concluido] Todos os imoveis do escopo ja foram extraidos!")
         return
 
-    # agrupa os imoveis pendentes em lotes de tamanho batch_size
     lotes = [pendentes[i : i + batch_size] for i in range(0, len(pendentes), batch_size)]
     total_lotes = len(lotes)
     processados_nesta_sessao = 0
@@ -273,15 +246,11 @@ def executar_pipeline_extracao_llm(
                 model=model,
             )
 
-            # atualiza o dicionario principal com os resultados do lote
             extracoes.update(resultados_lote)
             processados_nesta_sessao += len(lote)
             print("OK!")
 
-            # salva o checkpoint no disco a cada lote concluido
             salvar_extracoes_checkpoint(checkpoint_file, extracoes)
-
-            # pausa entre lotes para respeitar rate limit
             time.sleep(sleep_between)
 
     except KeyboardInterrupt:
@@ -292,7 +261,7 @@ def executar_pipeline_extracao_llm(
 
 
 def fundir_extracoes_nos_csvs_processados() -> None:
-    # le o json de extracoes salvas e converte em dataframe tabular csv
+    # le as extracoes de atributos recuperados e exporta para csv
     import pandas as pd
 
     checkpoint_file = config.EXTRACTIONS_JSON
@@ -312,15 +281,15 @@ def fundir_extracoes_nos_csvs_processados() -> None:
     df_extra.index.name = "url_anuncio"
     df_extra.reset_index(inplace=True)
 
-    caminho_saida = config.INTERIM / "llm_features_normalized.csv"
+    caminho_saida = config.INTERIM / "llm_recovered_attributes.csv"
     df_extra.to_csv(caminho_saida, index=False, encoding="utf-8")
-    print(f"[Sucesso] Atributos extraidos via LLM exportados para: {caminho_saida}")
+    print(f"[Sucesso] Atributos recuperados via LLM exportados para: {caminho_saida}")
     print(f"          Total de registros normalizados: {len(df_extra)}")
 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Extrai caracteristicas estruturadas da descricao dos imoveis em lote usando Groq LLM (Issue #9)."
+        description="Recupera atributos basicos omitidos no HTML (suites, quartos, garagens, area) via Groq LLM (Issue #9)."
     )
     parser.add_argument(
         "--limit",
@@ -354,7 +323,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--merge",
         action="store_true",
-        help="Normaliza e funde os resultados salvos em extractions_llm.json para CSV.",
+        help="Exporta os resultados salvos em extractions_llm.json para CSV.",
     )
     return parser
 
