@@ -22,6 +22,14 @@ from imoveis_jp import config
 # le credenciais salvas no arquivo .env
 load_dotenv()
 
+# lista de comodidades padrao que ja existem no html deterministico e devem ser ignoradas no diferenciais_unicos
+COMODIDADES_PADRAO_IGNORAR = {
+    "piscina", "academia", "elevador", "portaria", "churrasqueira",
+    "salao de festas", "salao de jogos", "playground", "interfone",
+    "brinquedoteca", "espaco gourmet", "area de lazer", "quadra",
+    "gerador", "vaga", "garagem", "cozinha", "area de servico",
+}
+
 # prompt da etapa 1: descoberta aberta de atributos em amostra de 1000 imoveis
 SYSTEM_PROMPT_DISCOVERY = """Voce e um especialista em PLN e analise de dados imobiliarios.
 Sua tarefa e analisar a descricao do imovel e listar TODOS os atributos, caracteristicas, diferenciais, orientacoes e condicoes comerciais citados no texto livre.
@@ -92,7 +100,6 @@ def executar_descoberta_amostral(
     imoveis: List[Dict[str, Any]],
     model: str = "llama-3.1-8b-instant",
 ) -> None:
-    # etapa 1: executa amostragem aberta para descobrir atributos mais frequentes
     print(f"\n[Etapa 1] Iniciando Descoberta Empirica de Atributos em {len(imoveis)} imoveis...")
 
     contador_atributos: Counter = Counter()
@@ -134,7 +141,6 @@ def executar_descoberta_amostral(
 
         time.sleep(1.2)
 
-    # exporta o ranking de frequencia de atributos descobertos na amostragem
     arquivo_ranking = config.INTERIM / "discovered_attributes_rank.json"
     resultado_ranking = {
         "total_amostras_analisadas": len(amostras_salvas),
@@ -253,7 +259,13 @@ def _sanitizar_resposta_lote(dados: Dict[str, Any]) -> Dict[str, Any]:
     # diferenciais exoticos
     dif = dados.get("diferenciais_unicos")
     if isinstance(dif, list):
-        res["diferenciais_unicos"] = [str(x).strip().lower() for x in dif if isinstance(x, str) and len(str(x).strip()) > 2]
+        filtrados = []
+        for x in dif:
+            if isinstance(x, str):
+                item_clean = x.strip().lower()
+                if len(item_clean) > 2 and not any(padrao in item_clean for padrao in COMODIDADES_PADRAO_IGNORAR):
+                    filtrados.append(item_clean)
+        res["diferenciais_unicos"] = filtrados
 
     return res
 
@@ -294,7 +306,7 @@ def salvar_extracoes_checkpoint(caminho: Path, dados: Dict[str, Dict[str, Any]])
 
 def executar_pipeline_extracao_llm(
     limit: Optional[int] = None,
-    batch_size: int = 5,
+    batch_size: int = 3,
     model: str = "llama-3.1-8b-instant",
     sleep_between: float = 1.5,
     dry_run: bool = False,
@@ -326,12 +338,11 @@ def executar_pipeline_extracao_llm(
         print("[Erro] A biblioteca 'groq' nao esta instalada. Execute: pip install groq")
         sys.exit(1)
 
-    # se a flag --discover for ativada, roda a etapa 1 de amostragem aberta
     if discover:
         executar_descoberta_amostral(client=client, imoveis=imoveis, model=model)
         return
 
-    print(f"[OK] Iniciando Extracao de Atributos via Groq ({len(imoveis)} imoveis)...")
+    print(f"[OK] Iniciando Extracao de Alta Precisao via Groq ({len(imoveis)} imoveis)...")
     print(f"     Tamanho do Lote (Batching): {batch_size} imoveis por requisicao")
     print(f"     Modelo selecionado: {model}")
     print(f"     Arquivo de Checkpoint: {checkpoint_file}")
@@ -348,6 +359,7 @@ def executar_pipeline_extracao_llm(
 
     if not pendentes:
         print("[Concluido] Todos os imoveis do escopo ja foram extraidos!")
+        fundir_extracoes_nos_csvs_processados()
         return
 
     lotes = [pendentes[i : i + batch_size] for i in range(0, len(pendentes), batch_size)]
@@ -375,6 +387,7 @@ def executar_pipeline_extracao_llm(
         print("\n[Interrompido] Processamento interrompido pelo usuario. Salvando progresso...")
     finally:
         salvar_extracoes_checkpoint(checkpoint_file, extracoes)
+        fundir_extracoes_nos_csvs_processados()
         print(f"[Concluido] Sessao finalizada! Total em checkpoint: {len(extracoes)} imoveis.")
 
 
@@ -464,8 +477,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--batch-size",
         type=int,
-        default=5,
-        help="Numero de imoveis por requisicao de lote (default: 5 imoveis/lote).",
+        default=3,
+        help="Numero de imoveis por requisicao de lote (default: 3 imoveis/lote para máxima precisao).",
     )
     parser.add_argument(
         "--model",
