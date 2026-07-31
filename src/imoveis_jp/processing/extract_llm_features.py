@@ -1,12 +1,13 @@
 # -*- coding: utf-8 -*-
 """
-modulo de extracao via llm otimizado com truncamento de texto de 600 chars (issue #9)
-garante economia de 85% de tokens e execucao em alta velocidade sem estourar rate limit
+modulo de extracao via llm com suporte a rotacao automatica de multiplas chaves api do groq (issue #9)
+garante maxima velocidade e resiliencia eliminando bloqueios por rate limit (http 429)
 """
 
 from __future__ import annotations
 
 import argparse
+import itertools
 import json
 import os
 import random
@@ -31,102 +32,147 @@ COMODIDADES_HTML_IGNORAR = {
     "sala", "wc social", "1 vaga de garagem", "3 quartos", "2 quartos",
 }
 
-# prompt da etapa 1: descoberta aberta em 1000 imoveis
-SYSTEM_PROMPT_DISCOVERY = """Voce e um especialista em PLN e analise de dados imobiliarios.
-Sua tarefa e analisar a descricao do imovel e listar TODOS os atributos, caracteristicas, diferenciais, orientacoes e condicoes comerciais citados no texto livre.
+# prompt da etapa 1: descoberta aberta em lote
+SYSTEM_PROMPT_DISCOVERY_BATCH = """Voce e um especialista em PLN e analise de dados imobiliarios.
+Sua tarefa e analisar a descricao de cada imovel e extrair TODOS os atributos, caracteristicas, diferenciais, orientacoes e condicoes comerciais citados no texto livre.
 
-Responda ESTRITAMENTE com um objeto JSON valido contendo a chave "atributos_encontrados", que e uma lista de strings curtas em minusculo:
+Para cada imovel recebido na lista, extraia a lista "atributos_encontrados" com termos curtos em minusculo.
+
+Responda ESTRITAMENTE com um objeto JSON valido contendo a chave "resultados":
 {
-    "atributos_encontrados": [
-        "posicao solar nascente",
-        "distancia 200m da praia",
-        "terreo com area privativa",
-        "em construcao",
-        "entrega em 2026",
-        "moveis planejados na cozinha",
-        "aceita permuta",
-        "aceita fgts",
-        "automacao residencial",
-        "piscina privativa"
+    "resultados": [
+        {
+            "id_lote": 0,
+            "atributos_encontrados": [
+                "posicao solar nascente",
+                "distancia 200m da praia",
+                "terreo com area privativa",
+                "em construcao",
+                "entrega em 2026",
+                "moveis planejados na cozinha",
+                "aceita permuta",
+                "aceita fgts",
+                "automacao residencial"
+            ]
+        }
     ]
 }
-
-Regras:
-1. Extraia qualquer informacao relevante de posicao solar, distancia do mar, fase da obra, tipologia, acabamento, condicoes comerciais e diferenciais
-2. Evite incluir frases longas, use termos curtos e padronizados em minusculo
 """
 
+def carregar_clientes_groq() -> List[Any]:
+    # le multiplas chaves de api do arquivo .env com suporte a rotacao round-robin
+    try:
+        from groq import Groq
+    except ImportError:
+        print("[Erro] A biblioteca 'groq' nao esta instalada. Execute: pip install groq", flush=True)
+        sys.exit(1)
+
+    chaves_brutas = os.environ.get("GROQ_API_KEYS", "") or os.environ.get("GROQ_API_KEY", "")
+    lista_chaves = [k.strip() for k in chaves_brutas.split(",") if k.strip() and not k.strip().startswith("SUA_CHAVE")]
+
+    if not lista_chaves:
+        print("[Erro] Nenhuma chave valida da API Groq encontrada no arquivo .env", flush=True)
+        sys.exit(1)
+
+    clientes = [Groq(api_key=key) for key in lista_chaves]
+    print(f"[OK] Pool de Chaves API ativado com sucesso: {len(clientes)} chave(s) do Groq em rotacao round-robin!", flush=True)
+    return clientes
+
+
 def executar_descoberta_amostral(
-    client: Any,
+    clientes: List[Any],
     imoveis: List[Dict[str, Any]],
     model: str = "llama-3.1-8b-instant",
+    batch_size: int = 5,
 ) -> List[str]:
-    print(f"\n[Etapa 1] Iniciando Descoberta Empirica Otimizada em {len(imoveis)} imoveis...")
+    print(f"\n[Etapa 1] Iniciando Descoberta Empirica com Rotacao de Chaves ({len(imoveis)} imoveis)...", flush=True)
 
     contador_atributos: Counter = Counter()
     amostras_salvas = {}
-
-    for i, imovel in enumerate(imoveis):
-        url = imovel.get("url_anuncio")
-        # limita aos primeiros 600 caracteres onde concentram 98% dos atributos relevantes
-        desc = imovel.get("descricao_completa", "").strip()[:600]
-
-        if not url or len(desc) < 15:
-            continue
-
-        print(f"[{i + 1}/{len(imoveis)}] Analisando amostra: {url[-45:]}...", end=" ")
-
-        try:
-            response = client.chat.completions.create(
-                messages=[
-                    {"role": "system", "content": SYSTEM_PROMPT_DISCOVERY},
-                    {"role": "user", "content": f"Descricao:\n{desc}"},
-                ],
-                model=model,
-                temperature=0.2,
-                response_format={"type": "json_object"},
-            )
-
-            conteudo = response.choices[0].message.content
-            dados = json.loads(conteudo)
-            atributos = dados.get("atributos_encontrados", [])
-
-            for at in atributos:
-                if isinstance(at, str) and len(at.strip()) > 2:
-                    norm = at.strip().lower()
-                    contador_atributos[norm] += 1
-
-            amostras_salvas[url] = atributos
-            print(f"OK! ({len(atributos)} atributos descobertos)")
-
-        except Exception as e:
-            print(f"Erro: {e}")
-
-        time.sleep(0.3)
-
     arquivo_ranking = config.INTERIM / "discovered_attributes_rank.json"
-    resultado_ranking = {
-        "total_amostras_analisadas": len(amostras_salvas),
-        "ranking_frequencia": dict(contador_atributos.most_common(100)),
-    }
 
-    with open(arquivo_ranking, "w", encoding="utf-8") as f:
-        json.dump(resultado_ranking, f, ensure_ascii=False, indent=2)
+    validos = [item for item in imoveis if item.get("url_anuncio") and len(item.get("descricao_completa", "").strip()) >= 15]
+    lotes = [validos[i : i + batch_size] for i in range(0, len(validos), batch_size)]
+    total_lotes = len(lotes)
 
-    print("\n" + "=" * 65)
-    print("ETAPA 1 (DESCOBERTA EMPIRICA DE ATRIBUTOS) CONCLUIDA COM SUCESSO!")
-    print("=" * 65)
-    print(f"Arquivo de Ranking salvo em: {arquivo_ranking}")
-    print("TOP 20 ATRIBUTOS REAIS MAIS FREQUENTES DESCOBERTOS:")
+    pool_clientes = itertools.cycle(clientes)
+
+    for idx_lote, lote in enumerate(lotes):
+        print(f"[{idx_lote + 1}/{total_lotes}] Processando lote descoberta ({len(lote)} imoveis)...", end=" ", flush=True)
+
+        payload_prompt = []
+        for idx, item in enumerate(lote):
+            desc = item.get("descricao_completa", "").strip()[:500]
+            payload_prompt.append({"id_lote": idx, "descricao": desc})
+
+        prompt_usuario = f"Lista de Imoveis:\n{json.dumps(payload_prompt, ensure_ascii=False)}"
+
+        sucesso_lote = False
+        for attempt in range(max(6, len(clientes) * 3)):
+            client = next(pool_clientes)
+            try:
+                response = client.chat.completions.create(
+                    messages=[
+                        {"role": "system", "content": SYSTEM_PROMPT_DISCOVERY_BATCH},
+                        {"role": "user", "content": prompt_usuario},
+                    ],
+                    model=model,
+                    temperature=0.2,
+                    response_format={"type": "json_object"},
+                )
+
+                conteudo = response.choices[0].message.content
+                dados = json.loads(conteudo)
+                lista_res = dados.get("resultados", [])
+
+                for res in lista_res:
+                    id_lote = res.get("id_lote")
+                    if id_lote is not None and 0 <= id_lote < len(lote):
+                        url = lote[id_lote]["url_anuncio"]
+                        atributos = res.get("atributos_encontrados", [])
+                        for at in atributos:
+                            if isinstance(at, str) and len(at.strip()) > 2:
+                                contador_atributos[at.strip().lower()] += 1
+                        amostras_salvas[url] = atributos
+
+                print("OK!", flush=True)
+                sucesso_lote = True
+                break
+
+            except Exception as e:
+                erro_str = str(e).lower()
+                if "429" in erro_str or "rate limit" in erro_str or "too many requests" in erro_str:
+                    sleep_time = 1.5 + random.uniform(0.2, 0.5)
+                    print(f"[Rate Limit 429] Rotacionando chave API Groq... (Tentativa {attempt + 1})", flush=True)
+                    time.sleep(sleep_time)
+                else:
+                    print(f"Erro: {e}", flush=True)
+                    break
+
+        if sucesso_lote:
+            resultado_ranking = {
+                "total_amostras_analisadas": len(amostras_salvas),
+                "ranking_frequencia": dict(contador_atributos.most_common(100)),
+            }
+            with open(arquivo_ranking, "w", encoding="utf-8") as f:
+                json.dump(resultado_ranking, f, ensure_ascii=False, indent=2)
+
+        time.sleep(0.5)
+
+    print("\n" + "=" * 65, flush=True)
+    print("ETAPA 1 (DESCOBERTA EMPIRICA EM LOTE) CONCLUIDA COM SUCESSO!", flush=True)
+    print("=" * 65, flush=True)
+    print(f"Arquivo de Ranking salvo em: {arquivo_ranking}", flush=True)
+    print("TOP 20 ATRIBUTOS REAIS MAIS FREQUENTES DESCOBERTOS:", flush=True)
 
     atributos_filtrados_relevantes = []
     for at, count in contador_atributos.most_common(100):
         if at not in COMODIDADES_HTML_IGNORAR:
             atributos_filtrados_relevantes.append(at)
             if len(atributos_filtrados_relevantes) <= 20:
-                print(f"  - {at:40s}: {count} ocorrencias")
+                print(f"  - {at:40s}: {count} ocorrencias", flush=True)
 
-    print("=" * 65)
+    print("=" * 65, flush=True)
     return atributos_filtrados_relevantes[:25]
 
 
@@ -171,18 +217,18 @@ Responda ESTRITAMENTE com um objeto JSON valido contendo a chave "resultados", q
 
 
 def extrair_lote_atributos_llm(
-    client: Any,
+    clientes: List[Any],
     lote_imoveis: List[Dict[str, Any]],
     atributos_dinamicos: List[str],
     model: str = "llama-3.1-8b-instant",
-    max_retries: int = 5,
+    max_retries: int = 6,
 ) -> Dict[str, Dict[str, Any]]:
     if not lote_imoveis:
         return {}
 
     payload_prompt = []
     for idx, item in enumerate(lote_imoveis):
-        desc = item.get("descricao_completa", "").strip()[:600]
+        desc = item.get("descricao_completa", "").strip()[:500]
         if len(desc) < 10 or desc == "Descrição não encontrada.":
             desc = "sem descricao disponivel"
         payload_prompt.append({"id_lote": idx, "descricao": desc})
@@ -190,7 +236,10 @@ def extrair_lote_atributos_llm(
     prompt_sistema = construir_prompt_dinamico_batch(atributos_dinamicos)
     prompt_usuario = f"Lista de Imoveis para Processar:\n{json.dumps(payload_prompt, ensure_ascii=False)}"
 
-    for attempt in range(max_retries):
+    pool_clientes = itertools.cycle(clientes)
+
+    for attempt in range(max(max_retries, len(clientes) * 2)):
+        client = next(pool_clientes)
         try:
             response = client.chat.completions.create(
                 messages=[
@@ -223,11 +272,11 @@ def extrair_lote_atributos_llm(
         except Exception as e:
             erro_str = str(e).lower()
             if "429" in erro_str or "rate limit" in erro_str or "too many requests" in erro_str:
-                sleep_time = 2.0 + random.uniform(0.5, 1.0)
-                print(f"[Rate Limit HTTP 429] Lote tentativa {attempt + 1}/{max_retries}. Aguardando {sleep_time:.1f}s...")
+                sleep_time = 1.5 + random.uniform(0.2, 0.5)
+                print(f"[Rate Limit HTTP 429] Rotacionando chave API Groq... (Tentativa {attempt + 1})", flush=True)
                 time.sleep(sleep_time)
             else:
-                print(f"[Erro de Requisicao Lote] Tentativa {attempt + 1}: {e}")
+                print(f"[Erro de Requisicao Lote] Tentativa {attempt + 1}: {e}", flush=True)
                 time.sleep(1.0)
 
     res_falha = {}
@@ -285,7 +334,7 @@ def carregar_extracoes_existentes(caminho: Path) -> Dict[str, Dict[str, Any]]:
             with open(caminho, "r", encoding="utf-8") as f:
                 return json.load(f)
         except json.JSONDecodeError:
-            print("[Aviso] Arquivo de extracao intermediario corrompido ou vazio. Reiniciando mapa.")
+            print("[Aviso] Arquivo de extracao intermediario corrompido ou vazio. Reiniciando mapa.", flush=True)
     return {}
 
 
@@ -301,7 +350,7 @@ def executar_pipeline_extracao_llm(
     limit: Optional[int] = None,
     batch_size: int = 10,
     model: str = "llama-3.1-8b-instant",
-    sleep_between: float = 0.8,
+    sleep_between: float = 0.5,
     dry_run: bool = False,
     discover: bool = False,
     reset_checkpoint: bool = False,
@@ -311,7 +360,7 @@ def executar_pipeline_extracao_llm(
     checkpoint_file = config.EXTRACTIONS_JSON
 
     if not input_file.exists():
-        print(f"[Erro] Arquivo de entrada '{input_file}' nao foi encontrado.")
+        print(f"[Erro] Arquivo de entrada '{input_file}' nao foi encontrado.", flush=True)
         sys.exit(1)
 
     with open(input_file, "r", encoding="utf-8") as f:
@@ -320,76 +369,65 @@ def executar_pipeline_extracao_llm(
     if limit:
         imoveis = imoveis[:limit]
 
-    api_key = os.environ.get("GROQ_API_KEY")
-    if not api_key:
-        print("[Erro] GROQ_API_KEY nao foi encontrada nas variaveis de ambiente nem no arquivo .env.")
-        sys.exit(1)
-
-    try:
-        from groq import Groq
-        client = Groq(api_key=api_key)
-    except ImportError:
-        print("[Erro] A biblioteca 'groq' nao esta instalada. Execute: pip install groq")
-        sys.exit(1)
+    clientes = carregar_clientes_groq()
 
     if discover:
-        executar_descoberta_amostral(client=client, imoveis=imoveis, model=model)
+        executar_descoberta_amostral(clientes=clientes, imoveis=imoveis, model=model, batch_size=5)
         return
 
     if reset_checkpoint and checkpoint_file.exists():
-        print("[Reset] Apagando checkpoint antigo para rodar o novo schema dinamico limpo...")
+        print("[Reset] Apagando checkpoint antigo para rodar o novo schema dinamico limpo...", flush=True)
         checkpoint_file.unlink()
 
     atributos_dinamicos = carregar_atributos_do_ranking()
 
-    print(f"[OK] Iniciando Extracao Ultra-Rapida em Lote ({len(imoveis)} imoveis no escopo)...")
-    print(f"     Tamanho do Lote (Batching): {batch_size} imoveis por requisicao")
-    print(f"     Modelo selecionado: {model}")
-    print(f"     Arquivo de Checkpoint: {checkpoint_file}")
+    print(f"[OK] Iniciando Extracao Otimizada com Rotacao Multi-Chave ({len(imoveis)} imoveis no escopo)...", flush=True)
+    print(f"     Atributos Dinamicos Descobertos: {len(atributos_dinamicos)} atributos", flush=True)
+    print(f"     Tamanho do Lote (Batching): {batch_size} imoveis por requisicao", flush=True)
+    print(f"     Modelo selecionado: {model}", flush=True)
+    print(f"     Arquivo de Checkpoint: {checkpoint_file}", flush=True)
 
     if dry_run:
-        print("[DRY-RUN] Modo --dry-run ativado. Nenhuma chamada de API sera realizada.")
+        print("[DRY-RUN] Modo --dry-run ativado. Nenhuma chamada de API sera realizada.", flush=True)
         return
 
     extracoes = carregar_extracoes_existentes(checkpoint_file)
-    print(f"[Checkpoint] Extracoes previamente salvas: {len(extracoes)}")
+    print(f"[Checkpoint] Extracoes previamente salvas: {len(extracoes)}", flush=True)
 
     pendentes = [item for item in imoveis if item.get("url_anuncio") and item.get("url_anuncio") not in extracoes]
-    print(f"[Pendentes] Imoveis restantes a processar: {len(pendentes)}")
+    print(f"[Pendentes] Imoveis restantes a processar: {len(pendentes)}", flush=True)
 
     if not pendentes:
-        print("[Concluido] Todos os imoveis do escopo ja foram extraidos!")
+        print("[Concluido] Todos os imoveis do escopo ja foram extraidos!", flush=True)
         fundir_extracoes_nos_csvs_processados(atributos_dinamicos)
         return
 
     lotes = [pendentes[i : i + batch_size] for i in range(0, len(pendentes), batch_size)]
     total_lotes = len(lotes)
-    processados_nesta_sessao = 0
 
     try:
         for idx_lote, lote in enumerate(lotes):
-            print(f"[{idx_lote + 1}/{total_lotes}] Processando lote com {len(lote)} imoveis...", end=" ")
+            print(f"[{idx_lote + 1}/{total_lotes}] Processando lote com {len(lote)} imoveis...", end=" ", flush=True)
 
             resultados_lote = extrair_lote_atributos_llm(
-                client=client,
+                clientes=clientes,
                 lote_imoveis=lote,
                 atributos_dinamicos=atributos_dinamicos,
                 model=model,
             )
 
             extracoes.update(resultados_lote)
-            processados_nesta_sessao += len(lote)
-            print("OK!")
+            print("OK!", flush=True)
 
             salvar_extracoes_checkpoint(checkpoint_file, extracoes)
             time.sleep(sleep_between)
 
     except KeyboardInterrupt:
-        print("\n[Interrompido] Processamento interrompido pelo usuario. Salvando progresso...")
+        print("\n[Interrompido] Processamento interrompido pelo usuario. Salvando progresso...", flush=True)
     finally:
         salvar_extracoes_checkpoint(checkpoint_file, extracoes)
         fundir_extracoes_nos_csvs_processados(atributos_dinamicos)
-        print(f"[Concluido] Sessao finalizada! Total em checkpoint: {len(extracoes)} imoveis.")
+        print(f"[Concluido] Sessao finalizada! Total em checkpoint: {len(extracoes)} imoveis.", flush=True)
 
 
 def fundir_extracoes_nos_csvs_processados(atributos_dinamicos: Optional[List[str]] = None) -> None:
@@ -398,14 +436,14 @@ def fundir_extracoes_nos_csvs_processados(atributos_dinamicos: Optional[List[str
     checkpoint_file = config.EXTRACTIONS_JSON
 
     if not checkpoint_file.exists():
-        print(f"[Aviso] Nenhuma extracao encontrada em '{checkpoint_file}'. Execute a extracao primeiro.")
+        print(f"[Aviso] Nenhuma extracao encontrada em '{checkpoint_file}'. Execute a extracao primeiro.", flush=True)
         return
 
     with open(checkpoint_file, "r", encoding="utf-8") as f:
         extracoes = json.load(f)
 
     if not extracoes:
-        print("[Aviso] O arquivo de extracoes esta vazio.")
+        print("[Aviso] O arquivo de extracoes esta vazio.", flush=True)
         return
 
     df_extra = pd.DataFrame.from_dict(extracoes, orient="index")
@@ -414,8 +452,8 @@ def fundir_extracoes_nos_csvs_processados(atributos_dinamicos: Optional[List[str
 
     caminho_saida = config.INTERIM / "llm_features_normalized.csv"
     df_extra.to_csv(caminho_saida, index=False, encoding="utf-8")
-    print(f"[Sucesso] Atributos extraidos via LLM exportados para CSV: {caminho_saida}")
-    print(f"          Total de registros normalizados: {len(df_extra)}")
+    print(f"[Sucesso] Atributos extraidos via LLM exportados para CSV: {caminho_saida}", flush=True)
+    print(f"          Total de registros normalizados: {len(df_extra)}", flush=True)
 
     fundir_json_enriquecido_v2(atributos_dinamicos)
 
@@ -452,12 +490,12 @@ def fundir_json_enriquecido_v2(atributos_dinamicos: Optional[List[str]] = None) 
     with open(output_json, "w", encoding="utf-8") as f:
         json.dump(imoveis_v2, f, ensure_ascii=False, indent=2)
 
-    print(f"[Sucesso] JSON v2 do Scrap (enriquecido com LLM) salvo em: {output_json}")
+    print(f"[Sucesso] JSON v2 do Scrap (enriquecido com LLM) salvo em: {output_json}", flush=True)
 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Pipeline otimizado de extracao em lote via Groq LLM (Issue #9)."
+        description="Pipeline otimizado com rotacao multi-chave via Groq LLM (Issue #9)."
     )
     parser.add_argument(
         "--discover",
@@ -485,8 +523,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--sleep",
         type=float,
-        default=0.8,
-        help="Segundos de pausa entre requisicoes de lote (default: 0.8s).",
+        default=0.5,
+        help="Segundos de pausa entre requisicoes de lote (default: 0.5s).",
     )
     parser.add_argument(
         "--reset",
