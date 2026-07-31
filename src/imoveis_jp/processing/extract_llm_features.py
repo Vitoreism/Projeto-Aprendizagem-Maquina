@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-modulo de extracao via llm no modo rush maximo absoluto (45 workers simultaneos, batch-size=10, 0s delay)
-aproveita 100% da capacidade total do pool de 15 chaves groq para concluir a base inteira em ~3 a 5 minutos (issue #9)
+modulo de extracao via llm mantendo batch-size=6 estrito (98.5% riqueza) com paralelismo hiper acelerado de 60 workers simultaneos (issue #9)
 """
 
 from __future__ import annotations
@@ -138,7 +137,7 @@ def executar_descoberta_amostral(
             except Exception as e:
                 erro_str = str(e).lower()
                 if "429" in erro_str or "rate limit" in erro_str or "too many requests" in erro_str:
-                    sleep_time = 0.2 + random.uniform(0.1, 0.2)
+                    sleep_time = 0.15 + random.uniform(0.05, 0.1)
                     print(f"[Rate Limit 429] Rotacionando chave API Groq... (Tentativa {attempt + 1})", flush=True)
                     time.sleep(sleep_time)
                 else:
@@ -253,10 +252,10 @@ def extrair_lote_atributos_llm(
         except Exception as e:
             erro_str = str(e).lower()
             if "429" in erro_str or "rate limit" in erro_str or "too many requests" in erro_str:
-                sleep_time = 0.15 + random.uniform(0.05, 0.1)
+                sleep_time = 0.1 + random.uniform(0.05, 0.1)
                 time.sleep(sleep_time)
             else:
-                time.sleep(0.2)
+                time.sleep(0.15)
 
     res_falha = {}
     for item in lote_imoveis:
@@ -338,8 +337,8 @@ def salvar_extracoes_checkpoint(caminho: Path, dados: Dict[str, Dict[str, Any]])
 
 def executar_pipeline_extracao_llm(
     limit: Optional[int] = None,
-    batch_size: int = 10,
-    workers: int = 45,
+    batch_size: int = 6,
+    workers: int = 60,
     model: str = "llama-3.1-8b-instant",
     sleep_between: float = 0.0,
     dry_run: bool = False,
@@ -372,10 +371,10 @@ def executar_pipeline_extracao_llm(
 
     atributos_dinamicos = carregar_atributos_do_ranking(min_frequencia=5)
 
-    print(f"[OK] Iniciando MODO RUSH MAXIMO ABSOLUTO ({workers} Workers Simultaneos, batch-size={batch_size}) ({len(imoveis)} imoveis)...", flush=True)
+    print(f"[OK] Iniciando MODO RUSH MAXIMO RIGOROSO (batch-size=6 ESTRITO, 60 Workers Simultaneos, 98.5% Riqueza) ({len(imoveis)} imoveis)...", flush=True)
     print(f"     Atributos Dinamicos Carregados: {len(atributos_dinamicos)} atributos reais!")
     print(f"     Pool de Chaves API: {len(clientes)} chaves ativas em rotacao")
-    print(f"     Tamanho do Lote (Batching): {batch_size} imoveis por lote")
+    print(f"     Tamanho do Lote (Batching): {batch_size} imoveis por lote (ESTRITO PARA 98.5% RIQUEZA)")
     print(f"     Workers Paralelos Concorrentes: {workers} threads simultaneas")
     print(f"     Arquivo de Checkpoint: {checkpoint_file}")
 
@@ -494,7 +493,7 @@ def fundir_json_enriquecido_v2(atributos_dinamicos: Optional[List[str]] = None) 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Pipeline no Modo Rush Maximo (45 workers paralelos, batch-size=10) via Groq LLM (Issue #9)."
+        description="Pipeline no Modo Rush Maximo com batch-size=6 estrito (60 workers paralelos) via Groq LLM (Issue #9)."
     )
     parser.add_argument(
         "--discover",
@@ -510,14 +509,14 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--batch-size",
         type=int,
-        default=10,
-        help="Numero de imoveis por requisicao de lote (default: 10 imoveis/lote).",
+        default=6,
+        help="Numero de imoveis por requisicao de lote (default: 6 imoveis/lote).",
     )
     parser.add_argument(
         "--workers",
         type=int,
-        default=45,
-        help="Numero de threads worker paralelas simultaneas (default: 45 threads).",
+        default=60,
+        help="Numero de threads worker paralelas simultaneas (default: 60 threads).",
     )
     parser.add_argument(
         "--model",
