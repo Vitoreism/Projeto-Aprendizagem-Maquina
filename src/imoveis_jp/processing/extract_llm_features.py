@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
-modulo de extracao de atributos em texto livre e comodidades via llm (issue #9)
-baseado na analise das primeiras descricoes e marcadores do dataset
+modulo de extracao via llm para capturar atributos estruturados e lista dinamica
+de diferenciais exoticos do imovel contidos na descricao em texto (issue #9)
 """
 
 from __future__ import annotations
@@ -21,9 +21,9 @@ from imoveis_jp import config
 # le credenciais salvas no arquivo .env
 load_dotenv()
 
-# prompt em lote com atributos identificados na analise das descricoes reais
+# prompt em lote capturando atributos estruturados e diferenciais exoticos
 SYSTEM_PROMPT_BATCH = """Voce e um especialista em analise de dados imobiliarios em Joao Pessoa (PB).
-Sua tarefa e analisar o texto de descricoes de imoveis e extrair atributos qualitativos e numericos informados pelo anunciante.
+Sua tarefa e analisar o texto de descricoes de imoveis e extrair atributos estruturados e uma lista dinamica de diferenciais raros/exoticos.
 
 Para cada imovel recebido na lista, extraia:
 - "posicao_solar": "Nascente" | "Poente" | "Sul" | "Norte" | "Nao informado"
@@ -36,6 +36,7 @@ Para cada imovel recebido na lista, extraia:
 - "reformado": true | false
 - "aceita_permuta": true | false
 - "aceita_fgts": true | false
+- "diferenciais_unicos": lista de strings com recursos raros, luxuosos ou exoticos citados no texto (ex: ["pe direito duplo", "automacao residencial", "piscina privativa na varanda", "painel solar", "adega climatizada", "fechadura digital", "tomada carro eletrico"]) ou [] se nao houver
 
 Responda ESTRITAMENTE com um objeto JSON valido contendo a chave "resultados", que e uma lista de objetos:
 {
@@ -51,7 +52,8 @@ Responda ESTRITAMENTE com um objeto JSON valido contendo a chave "resultados", q
             "moveis_projetados": false,
             "reformado": false,
             "aceita_permuta": false,
-            "aceita_fgts": false
+            "aceita_fgts": false,
+            "diferenciais_unicos": ["pe direito duplo", "automacao residencial"]
         }
     ]
 }
@@ -67,6 +69,7 @@ Regras de Extracao:
 8. "reformado": true se mencionar reformado ou novo
 9. "aceita_permuta": true se mencionar aceita permuta ou troca
 10. "aceita_fgts": true se mencionar permite utilizacao de FGTS
+11. "diferenciais_unicos": inclua expressoses curtas em minusculo para qualquer diferencial unico ou exotico relevante do imovel
 """
 
 def extrair_lote_atributos_llm(
@@ -135,7 +138,6 @@ def extrair_lote_atributos_llm(
 
 
 def _sanitizar_resposta_lote(dados: Dict[str, Any]) -> Dict[str, Any]:
-    # valida tipos e chaves do json retornado
     res = _retornar_atributos_padrao()
 
     # distancia da praia em metros
@@ -166,6 +168,13 @@ def _sanitizar_resposta_lote(dados: Dict[str, Any]) -> Dict[str, Any]:
         elif isinstance(v, str):
             res[c] = v.lower() in ("true", "sim", "yes", "1")
 
+    # diferenciais exoticos (lista de strings)
+    dif = dados.get("diferenciais_unicos")
+    if isinstance(dif, list):
+        res["diferenciais_unicos"] = [str(x).strip().lower() for x in dif if isinstance(x, str) and len(str(x).strip()) > 2]
+    elif isinstance(dif, str) and len(dif.strip()) > 2:
+        res["diferenciais_unicos"] = [dif.strip().lower()]
+
     return res
 
 
@@ -181,6 +190,7 @@ def _retornar_atributos_padrao() -> Dict[str, Any]:
         "reformado": False,
         "aceita_permuta": False,
         "aceita_fgts": False,
+        "diferenciais_unicos": [],
     }
 
 
@@ -223,7 +233,7 @@ def executar_pipeline_extracao_llm(
     if limit:
         imoveis = imoveis[:limit]
 
-    print(f"[OK] Iniciando Extracao de Atributos via LLM Groq ({len(imoveis)} imoveis)...")
+    print(f"[OK] Iniciando Extracao de Atributos e Diferenciais Exoticos via Groq ({len(imoveis)} imoveis)...")
     print(f"     Tamanho do Lote (Batching): {batch_size} imoveis por requisicao")
     print(f"     Modelo selecionado: {model}")
     print(f"     Arquivo de Checkpoint: {checkpoint_file}")
@@ -299,7 +309,16 @@ def fundir_extracoes_nos_csvs_processados() -> None:
         print("[Aviso] O arquivo de extracoes esta vazio.")
         return
 
-    df_extra = pd.DataFrame.from_dict(extracoes, orient="index")
+    # converte listas de diferenciais em string separada por virgula para o csv
+    extracoes_formatadas = {}
+    for url, item in extracoes.items():
+        copia = dict(item)
+        dif = copia.get("diferenciais_unicos")
+        if isinstance(dif, list):
+            copia["diferenciais_unicos"] = ", ".join(dif)
+        extracoes_formatadas[url] = copia
+
+    df_extra = pd.DataFrame.from_dict(extracoes_formatadas, orient="index")
     df_extra.index.name = "url_anuncio"
     df_extra.reset_index(inplace=True)
 

@@ -1,4 +1,4 @@
-# Documentação Técnica e Acadêmica da Issue #9: Extração de Atributos via LLM (Groq API)
+# Documentação Técnica e Acadêmica da Issue #9: Extração de Atributos e Diferenciais Exóticos via LLM (Groq API)
 
 **Autor:** Gabriel Ribeiro (`@gabrielbribeiroo`)  
 **Projeto:** Previsão e Análise de Preços de Imóveis em João Pessoa (PB)  
@@ -8,9 +8,9 @@
 
 ---
 
-## 1. Justificativa da Seleção de Atributos (Critérios Amostrais)
+## 1. Justificativa da Seleção de Atributos e Captura de Diferenciais Exóticos
 
-Em vez de definir atributos arbitrários, realizou-se uma análise amostral sobre as descrições brutas e comodidades do dataset (`data/raw/imoveis_joao_pessoa.json`).
+Em vez de definir atributos arbitrários ou fixos, realizou-se uma análise amostral sobre as descrições brutas e comodidades do dataset (`data/raw/imoveis_joao_pessoa.json`).
 
 Constatou-se que corretores e proprietários frequentemente omitiram dados nos campos estruturados do formulário HTML, inserindo informações cruciais para a precificação apenas no texto livre da descrição.
 
@@ -32,12 +32,14 @@ Constatou-se que corretores e proprietários frequentemente omitiram dados nos c
    - *Motivação:* Identifica imóveis usados que passaram por atualização completa de acabamento.
 8. **`aceita_permuta` / `aceita_fgts` (Booleanos):**
    - *Motivação:* Condições comerciais que ampliam o público comprador.
+9. **`diferenciais_unicos` (Lista Dinâmica de Strings):**
+   - *Motivação:* **Previne a perda de atributos exóticos ou raros.** Captura recursos como *"pé direito duplo"*, *"tomada para carro elétrico"*, *"automação residencial"*, *"jacuzzi"*, *"painéis solares"* ou *"solário"*.
 
 ---
 
 ## 2. Estratégia de Processamento em Lote (Batching)
 
-Para permitir o processamento dos 10.758 imóveis no mesmo dia no plano gratuito do Groq Cloud:
+Para permitir o processamento dos 10.758 imóveis no mesmo dia no plano gratuito do Groq Cloud sem perda de acurácia:
 * **Tamanho do Lote:** 5 imóveis por chamada de API (`--batch-size 5`).
 * **Redução de Chamadas:** Reduziu 10.758 chamadas para apenas **~2.150 requisições**.
 * **Tempo Total Estimado:** ~35 a 45 minutos.
@@ -54,7 +56,7 @@ Para permitir o processamento dos 10.758 imóveis no mesmo dia no plano gratuito
 ## 4. Guia de Execução no Terminal
 
 ```powershell
-# 1. Executar a extração dos atributos selecionados para a base inteira:
+# 1. Executar a extração dos atributos e diferenciais exóticos para a base inteira:
 .\.venv\Scripts\python.exe -m imoveis_jp.processing.extract_llm_features --batch-size 5
 
 # 2. Executar um teste com amostra de 10 imóveis:
