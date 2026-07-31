@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-modulo de extracao via llm com suporte dinamico ilimitado a multiplas chaves groq api (issue #9)
-carrega chaves por virgula em GROQ_API_KEYS ou individuais GROQ_API_KEY_1, GROQ_API_KEY_2, etc
+modulo de extracao via llm com salvamento atomico resiliente a travamentos de arquivo no windows (issue #9)
 """
 
 from __future__ import annotations
@@ -71,7 +70,6 @@ def carregar_clientes_groq() -> List[Any]:
         sys.exit(1)
 
     clientes = [Groq(api_key=key) for key in lista_chaves]
-    print(f"[OK] Pool de Chaves API ativado com sucesso: {len(clientes)} chave(s) do Groq em rotacao round-robin!", flush=True)
     return clientes
 
 
@@ -158,7 +156,6 @@ def executar_descoberta_amostral(
     print("\n" + "=" * 65, flush=True)
     print("ETAPA 1 (DESCOBERTA EMPIRICA EM LOTE) CONCLUIDA COM SUCESSO!", flush=True)
     print("=" * 65, flush=True)
-    print(f"Arquivo de Ranking salvo em: {arquivo_ranking}", flush=True)
 
     atributos_relevantes = [at for at, count in contador_atributos.most_common(100) if len(at) > 2]
     return atributos_relevantes
@@ -219,7 +216,6 @@ def extrair_lote_atributos_llm(
     prompt_sistema = construir_prompt_dinamico_batch(atributos_dinamicos)
     prompt_usuario = f"Lista de Imoveis para Processar:\n{json.dumps(payload_prompt, ensure_ascii=False)}"
 
-    # relê dinamicamente caso o usuario adicione novas chaves no .env durante a execucao
     clientes_atualizados = carregar_clientes_groq()
     pool_clientes = itertools.cycle(clientes_atualizados)
 
@@ -333,7 +329,14 @@ def salvar_extracoes_checkpoint(caminho: Path, dados: Dict[str, Dict[str, Any]])
     temp_file = caminho.with_suffix(".tmp")
     with open(temp_file, "w", encoding="utf-8") as f:
         json.dump(dados, f, ensure_ascii=False, indent=2)
-    temp_file.replace(caminho)
+
+    # aplica retentativas curtas para garantir salvamento em sistemas windows contra bloqueio temporario de arquivo
+    for attempt in range(5):
+        try:
+            temp_file.replace(caminho)
+            break
+        except PermissionError:
+            time.sleep(0.2)
 
 
 def executar_pipeline_extracao_llm(
@@ -486,7 +489,7 @@ def fundir_json_enriquecido_v2(atributos_dinamicos: Optional[List[str]] = None) 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Pipeline otimizado com recarga dinamica de chaves via Groq LLM (Issue #9)."
+        description="Pipeline otimizado com salvamento atômico resiliente a bloqueio de arquivo no Windows (Issue #9)."
     )
     parser.add_argument(
         "--discover",
