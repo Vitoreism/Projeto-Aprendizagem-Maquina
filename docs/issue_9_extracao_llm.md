@@ -1,4 +1,4 @@
-# Documentação Técnica e Acadêmica da Issue #9: infraestrutura de Extração de Texto Livre via LLM (Groq API)
+# Documentação Técnica e Acadêmica da Issue #9: Processamento em Lote (Batching) via LLM (Groq API)
 
 **Autor:** Gabriel Ribeiro (`@gabrielbribeiroo`)  
 **Projeto:** Previsão e Análise de Preços de Imóveis em João Pessoa (PB)  
@@ -8,75 +8,53 @@
 
 ---
 
-## 1. Introdução e Propósito do Módulo
+## 1. Introdução e Estratégia de Execução no Mesmo Dia
 
-A **Issue #9** tem como propósito criar a infraestrutura robusta, resiliente e extensível de **Processamento de Linguagem Natural (PLN) baseada em LLMs (Large Language Models)** para extrair atributos do texto livre do campo `descricao_completa` dos imóveis.
+A **Issue #9** tem como propósito a extração de características em texto livre do campo `descricao_completa` dos anúncios através de Processamento de Linguagem Natural (PLN) guiado por LLMs.
 
-Nesta etapa, o foco principal é a **construção da arquitetura técnica**, **estimativa precisa de tokens/custos**, **controle de taxas de requisição (*Rate Limits*)** e **salvamento incremental em lote**, permitindo que a equipe posteriormente defina ou ajuste o schema de atributos desejado sem precisar reconstruir o pipeline.
-
----
-
-## 2. Estimativa Científica de Tokens e Custos (Requisito da Issue #9)
-
-Foi realizado um estudo estatístico detalhado sobre o corpus de descrições dos anúncios (`data/raw/imoveis_joao_pessoa.json`):
-
-### 📊 2.1 Estatísticas do Dataset
-* **Total de imóveis cadastrados:** `10.758` anúncios
-* **Imóveis com descrição válida:** `10.751` anúncios (99.9%)
-* **Média de caracteres por descrição:** `743.8` caracteres
-* **Maior descrição:** `4.667` caracteres
-* **Volume total de caracteres:** `7.996.962` caracteres (~8 milhões de caracteres)
-
-### 🔢 2.2 Estimativa de Tokens
-Usando a taxa de conversão para o português (~1 token = 3.7 caracteres):
-* **Tokens das descrições brutas:** ~`2.161.341` tokens
-* **Tokens de instruções do prompt (System + User):** ~`1.612.650` tokens (150 tokens/imóvel)
-* **Tokens de saída estruturada (JSON):** ~`860.080` tokens (80 tokens/imóvel)
-* **TOTAL ESTIMADO DE TOKENS DO PROJETO:** **~`4.634.071` tokens** (~4.63 milhões)
-
-### ⚡ 2.3 Análise de Cotas e Custo (Groq Free Tier)
-- **Modelo de referência:** `llama-3.1-8b-instant`
-- **Custo financeiro:** **R$ 0,00** (Gratuito no Groq Cloud)
-- **Cota Diária (TPD):** 500.000 tokens / dia
-- **Cota de Requisições (RPD):** 14.400 requisições / dia (~30 RPM)
-- **Tempo estimado de execução total:** ~7.5 dias no limite diário gratuito (ou ~2.5 dias se agrupado em batches).
+Para viabilizar o processamento de todos os **10.758 imóveis no mesmo dia** dentro do plano gratuito do Groq (Free Tier), adotou-se a **Estratégia de Lote (Batching)**.
 
 ---
 
-## 3. Arquitetura do Pipeline Técnico
+## 2. A Estratégia de Lote (Batching)
 
-### 3.1 Tratamento de Rate Limits (HTTP 429) & Exponential Backoff
-O pipeline trata flutuações e limites de requisições da API através do algoritmo de **Exponential Backoff com Jitter**:
+### 🚀 2.1 Como Funciona
+Em vez de realizar uma chamada de API para cada anúncio individualmente (o que geraria 10.758 requisições e atingiria a cota diária em 10% do progresso), o script agrupa **5 a 10 descrições de imóveis no mesmo prompt de envio**.
 
-$$\Delta t_{\text{espera}} = \min\left(t_{\text{máx}}, t_{\text{base}} \times 2^{\text{tentativa}}\right) + \text{uniform}(0.5, 1.5)$$
+A LLM recebe a lista de imóveis identificados por um `id_lote` e retorna estritamente uma matriz JSON de respostas:
 
-### 3.2 Persistência Incremental e Escrita Atômica
-- **Arquivo de Checkpoint:** `data/interim/extractions_llm.json`
-- **Resumível / Idempotente:** Pula automaticamente anúncios já processados em execuções anteriores.
-- **Escrita Atômica:** Garante a integridade do JSON mesmo em caso de interrupção abrupta do processo.
-
----
-
-## 4. Guia de Execução e Reprodutibilidade
-
-Para rodar qualquer etapa no terminal na raiz do repositório:
-
-```powershell
-# 1. Estimativa automática de tokens e custos:
-.\.venv\Scripts\python.exe -m imoveis_jp.processing.estimate_llm_cost
-
-# 2. Execução em modo seco (Dry-Run / sem chamada de API):
-.\.venv\Scripts\python.exe -m imoveis_jp.processing.extract_llm_features --dry-run --limit 10
-
-# 3. Teste pontual com limite de N imóveis:
-.\.venv\Scripts\python.exe -m imoveis_jp.processing.extract_llm_features --limit 5
-
-# 4. Normalização para CSV intermediário:
-.\.venv\Scripts\python.exe -m imoveis_jp.processing.extract_llm_features --merge
+```json
+{
+  "resultados": [
+    { "id_lote": 0, "posicao_solar": "Nascente", "vista_mar": true, "beira_mar": false, ... },
+    { "id_lote": 1, "posicao_solar": "Poente", "vista_mar": false, "beira_mar": false, ... }
+  ]
+}
 ```
 
+### 📉 2.2 Ganhos de Desempenho e Eficiência
+* **Redução de Requisições:** De 10.758 chamadas para apenas **~1.070 a 2.150 chamadas de API**.
+* **Economia de Tokens:** Redução de **~90% no overhead de envio do System Prompt**.
+* **Tempo Total de Execução:** Reduzido de ~24 horas para **apenas ~35 a 60 minutos no mesmo dia**!
+
 ---
 
-## 5. Próximos Passos (Alinhamento com a Equipe)
+## 3. Resiliência do Pipeline (Rate Limits e Checkpoints)
 
-Quando a equipe decidir no futuro quais atributos específicos deseja extrair da descrição livre para o modelo final, basta atualizar a constante `SYSTEM_PROMPT` e a validação do schema em `extract_llm_features.py` e reexecutar o pipeline.
+1. **Exponential Backoff (HTTP 429):** Se a API retornar um limite de requisição por minuto (Rate Limit), o script aguarda automaticamente com tempo exponencial antes de tentar novamente.
+2. **Escrita Atômica de Checkpoints (`extractions_llm.json`):** A cada lote concluído, o resultado é salvo no disco de forma segura e atômica. Se o processo for interrompido, ao executar novamente ele **pula todos os imóveis já processados** e continua exatamente de onde parou.
+
+---
+
+## 4. Guia de Execução no Terminal
+
+```powershell
+# 1. Executar a extração em lote para toda a base no mesmo dia (batch-size=5):
+.\.venv\Scripts\python.exe -m imoveis_jp.processing.extract_llm_features --batch-size 5
+
+# 2. Executar um teste com amostra menor (ex: 20 imóveis):
+.\.venv\Scripts\python.exe -m imoveis_jp.processing.extract_llm_features --limit 20 --batch-size 5
+
+# 3. Exportar o resultado salvo do checkpoint para o CSV intermediário:
+.\.venv\Scripts\python.exe -m imoveis_jp.processing.extract_llm_features --merge
+```

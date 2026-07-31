@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
 modulo de integracao com a api do groq para extracao de atributos
-em texto livre da descricao completa dos imoveis (issue #9)
+em texto livre via lote (batching) para rodar a base inteira no mesmo dia (issue #9)
 """
 
 from __future__ import annotations
@@ -18,64 +18,89 @@ from typing import Any, Dict, List, Optional
 from dotenv import load_dotenv
 from imoveis_jp import config
 
-# le as credenciais salvas no .env
+# le credenciais salvas no arquivo .env
 load_dotenv()
 
-# prompt e schema json enviado para a llm
-SYSTEM_PROMPT = """Voce e um especialista em analise de dados imobiliarios em Joao Pessoa (PB).
-Sua tarefa e analisar o texto da descricao completa de um anuncio de imovel e extrair atributos relevantes.
+# prompt em lote enviando uma lista de imoveis e exigindo um json de resultados por id
+SYSTEM_PROMPT_BATCH = """Voce e um especialista em analise de dados imobiliarios em Joao Pessoa (PB).
+Sua tarefa e analisar uma lista de descricoes de imoveis e extrair os atributos de cada um.
 
-Responda ESTRITAMENTE com um objeto JSON valido (sem textos explicativos ou marcacoes markdown antes/depois).
-O JSON DEVE conter exatamente as seguintes chaves:
+Para cada imovel recebido na lista, extraia as seguintes chaves:
+- "posicao_solar": "Nascente" | "Poente" | "Sul" | "Norte" | "Nao informado"
+- "vista_mar": true | false
+- "beira_mar": true | false
+- "varanda_gourmet": true | false
+- "piso_porcelanato": true | false
+- "moveis_projetados": true | false
+- "andar_alto": true | false
+- "reformado": true | false
+- "aceita_permuta": true | false
+- "aceita_financiamento": true | false
+- "ar_condicionado": true | false
+- "area_lazer_privativa": true | false
 
+Responda ESTRITAMENTE com um objeto JSON valido contendo a chave "resultados", que e uma lista de objetos:
 {
-    "posicao_solar": "Nascente" | "Poente" | "Sul" | "Norte" | "Nao informado",
-    "vista_mar": true | false,
-    "beira_mar": true | false,
-    "varanda_gourmet": true | false,
-    "piso_porcelanato": true | false,
-    "moveis_projetados": true | false,
-    "andar_alto": true | false,
-    "reformado": true | false,
-    "aceita_permuta": true | false,
-    "aceita_financiamento": true | false,
-    "ar_condicionado": true | false,
-    "area_lazer_privativa": true | false
+    "resultados": [
+        {
+            "id_lote": 0,
+            "posicao_solar": "Nascente",
+            "vista_mar": true,
+            "beira_mar": false,
+            "varanda_gourmet": true,
+            "piso_porcelanato": false,
+            "moveis_projetados": true,
+            "andar_alto": true,
+            "reformado": false,
+            "aceita_permuta": false,
+            "aceita_financiamento": false,
+            "ar_condicionado": true,
+            "area_lazer_privativa": true
+        }
+    ]
 }
 
-Regras de Extracao:
-1. "posicao_solar": Retorne "Nascente", "Poente", "Sul", "Norte" apenas se mencionado explicitamente no texto. Caso contrario, "Nao informado".
-2. "vista_mar": true se mencionar vista para o mar, vista mar, vista definitiva do mar, mar a poucos metros.
-3. "beira_mar": true se for na av. beira mar, pe na areia, de frente para o mar.
-4. "varanda_gourmet": true se mencionar varanda gourmet, sacada gourmet, terraco gourmet.
+Regras:
+1. "posicao_solar": "Nascente", "Poente", "Sul" ou "Norte" apenas se explicitado. senao "Nao informado".
+2. "vista_mar": true se mencionar vista para o mar ou vista mar.
+3. "beira_mar": true se for na av beira mar ou pe na areia.
+4. "varanda_gourmet": true se mencionar varanda ou sacada gourmet.
 5. "piso_porcelanato": true se mencionar porcelanato.
-6. "moveis_projetados": true se mencionar armarios projetados, moveis planejados, embutidos, armarios na cozinha/quartos.
-7. "andar_alto": true se mencionar andar alto, cobertura, duplex nas ultimas pavimentacoes.
-8. "reformado": true se mencionar reformado, totalmente atualizado, novo, pronto para morar.
-9. "aceita_permuta": true se mencionar aceita permuta, estuda troca, recebe veiculo/imovel de menor valor.
-10. "aceita_financiamento": true se mencionar aceita financiamento, apto para financiamento, documentacao ok.
-11. "ar_condicionado": true se mencionar ar condicionado, split, infraestrutura para ar condicionado.
-12. "area_lazer_privativa": true se o imovel tiver piscina privativa, churrasqueira privativa, jacuzzzi ou terraco privativo.
+6. "moveis_projetados": true se mencionar armarios projetados ou moveis planejados.
+7. "andar_alto": true se mencionar andar alto ou cobertura.
+8. "reformado": true se mencionar reformado ou novo/pronto para morar.
+9. "aceita_permuta": true se mencionar aceita permuta ou troca.
+10. "aceita_financiamento": true se mencionar aceita financiamento.
+11. "ar_condicionado": true se mencionar ar condicionado ou split.
+12. "area_lazer_privativa": true se tiver piscina ou churrasqueira privativa.
 """
 
-def extrair_atributos_llm(
+def extrair_lote_atributos_llm(
     client: Any,
-    descricao: str,
+    lote_imoveis: List[Dict[str, Any]],
     model: str = "llama-3.1-8b-instant",
     max_retries: int = 5,
-) -> Optional[Dict[str, Any]]:
-    # se a descricao for muito curta ou nula, nao gasta cota de api
-    if not descricao or len(descricao.strip()) < 10 or descricao == "Descrição não encontrada.":
-        return _retornar_atributos_padrao()
+) -> Dict[str, Dict[str, Any]]:
+    # se o lote estiver vazio nao faz chamada
+    if not lote_imoveis:
+        return {}
 
-    prompt_usuario = f"Descricao do Imovel:\n\"\"\"\n{descricao.strip()}\n\"\"\""
+    # prepara a lista de descricoes para o prompt em lote
+    payload_prompt = []
+    for idx, item in enumerate(lote_imoveis):
+        desc = item.get("descricao_completa", "").strip()
+        if len(desc) < 10 or desc == "Descrição não encontrada.":
+            desc = "sem descricao disponivel"
+        payload_prompt.append({"id_lote": idx, "descricao": desc})
+
+    prompt_usuario = f"Lista de Imoveis para Processar:\n{json.dumps(payload_prompt, ensure_ascii=False)}"
 
     base_delay = 2.0
     for attempt in range(max_retries):
         try:
             response = client.chat.completions.create(
                 messages=[
-                    {"role": "system", "content": SYSTEM_PROMPT},
+                    {"role": "system", "content": SYSTEM_PROMPT_BATCH},
                     {"role": "user", "content": prompt_usuario},
                 ],
                 model=model,
@@ -84,22 +109,41 @@ def extrair_atributos_llm(
             )
 
             conteudo_resposta = response.choices[0].message.content
-            dados_extraidos = json.loads(conteudo_resposta)
-            return _validar_e_sanitizar_resposta(dados_extraidos)
+            dados_json = json.loads(conteudo_resposta)
+            lista_resultados = dados_json.get("resultados", [])
+
+            # maapeia os resultados de volta para a url do imovel
+            mapeamento_final = {}
+            for item_res in lista_resultados:
+                id_lote = item_res.get("id_lote")
+                if id_lote is not None and 0 <= id_lote < len(lote_imoveis):
+                    url_imovel = lote_imoveis[id_lote]["url_anuncio"]
+                    mapeamento_final[url_imovel] = _validar_e_sanitizar_resposta(item_res)
+
+            # garante que todos os imoveis do lote tenham resultado mesmo se a llm omitir um id
+            for idx, item in enumerate(lote_imoveis):
+                url = item["url_anuncio"]
+                if url not in mapeamento_final:
+                    mapeamento_final[url] = _retornar_atributos_padrao()
+
+            return mapeamento_final
 
         except Exception as e:
             erro_str = str(e).lower()
             # trata estouro de cota (429) com exponential backoff + jitter
             if "429" in erro_str or "rate limit" in erro_str or "too many requests" in erro_str:
                 sleep_time = (base_delay * (2 ** attempt)) + random.uniform(0.5, 1.5)
-                print(f"[Rate Limit HTTP 429] Tentativa {attempt + 1}/{max_retries}. Aguardando {sleep_time:.1f}s...")
+                print(f"[Rate Limit HTTP 429] Lote tentativa {attempt + 1}/{max_retries}. Aguardando {sleep_time:.1f}s...")
                 time.sleep(sleep_time)
             else:
-                print(f"[Erro de Requisicao] Tentativa {attempt + 1}: {e}")
+                print(f"[Erro de Requisicao Lote] Tentativa {attempt + 1}: {e}")
                 time.sleep(1.0)
 
-    print(f"[FALHA] Apos {max_retries} tentativas na extracao do imovel.")
-    return None
+    print(f"[FALHA] Apos {max_retries} tentativas na extracao do lote.")
+    res_falha = {}
+    for item in lote_imoveis:
+        res_falha[item["url_anuncio"]] = _retornar_atributos_padrao()
+    return res_falha
 
 
 def _validar_e_sanitizar_resposta(dados: Dict[str, Any]) -> Dict[str, Any]:
@@ -162,8 +206,9 @@ def salvar_extracoes_checkpoint(caminho: Path, dados: Dict[str, Dict[str, Any]])
 
 def executar_pipeline_extracao_llm(
     limit: Optional[int] = None,
+    batch_size: int = 5,
     model: str = "llama-3.1-8b-instant",
-    sleep_between: float = 1.2,
+    sleep_between: float = 1.5,
     dry_run: bool = False,
 ) -> None:
     config.ensure_dirs()
@@ -180,7 +225,8 @@ def executar_pipeline_extracao_llm(
     if limit:
         imoveis = imoveis[:limit]
 
-    print(f"[OK] Iniciando Pipeline de Extracao via LLM Groq ({len(imoveis)} imoveis no escopo)...")
+    print(f"[OK] Iniciando Pipeline Lote via Groq ({len(imoveis)} imoveis no escopo)...")
+    print(f"     Tamanho do Lote (Batching): {batch_size} imoveis por requisicao")
     print(f"     Modelo selecionado: {model}")
     print(f"     Arquivo de Checkpoint: {checkpoint_file}")
 
@@ -204,40 +250,38 @@ def executar_pipeline_extracao_llm(
     extracoes = carregar_extracoes_existentes(checkpoint_file)
     print(f"[Checkpoint] Extracoes previamente salvas: {len(extracoes)}")
 
+    # filtra imoveis pendentes de processamento
+    pendentes = [item for item in imoveis if item.get("url_anuncio") and item.get("url_anuncio") not in extracoes]
+    print(f"[Pendentes] Imoveis restantes a processar: {len(pendentes)}")
+
+    if not pendentes:
+        print("[Concluido] Todos os imoveis do escopo ja foram extraidos!")
+        return
+
+    # agrupa os imoveis pendentes em lotes de tamanho batch_size
+    lotes = [pendentes[i : i + batch_size] for i in range(0, len(pendentes), batch_size)]
+    total_lotes = len(lotes)
     processados_nesta_sessao = 0
-    total_escopo = len(imoveis)
 
     try:
-        for i, imovel in enumerate(imoveis):
-            url = imovel.get("url_anuncio")
-            if not url:
-                continue
+        for idx_lote, lote in enumerate(lotes):
+            print(f"[{idx_lote + 1}/{total_lotes}] Processando lote com {len(lote)} imoveis...", end=" ")
 
-            # pula o que ja foi processado anteriormente
-            if url in extracoes:
-                continue
-
-            descricao = imovel.get("descricao_completa", "")
-            print(f"[{i + 1}/{total_escopo}] Extraindo LLM para: {url[-45:]}...", end=" ")
-
-            resultado = extrair_atributos_llm(
+            resultados_lote = extrair_lote_atributos_llm(
                 client=client,
-                descricao=descricao,
+                lote_imoveis=lote,
                 model=model,
             )
 
-            if resultado is not None:
-                extracoes[url] = resultado
-                processados_nesta_sessao += 1
-                print("OK!")
-            else:
-                print("Pulado (falha).")
+            # atualiza o dicionario principal com os resultados do lote
+            extracoes.update(resultados_lote)
+            processados_nesta_sessao += len(lote)
+            print("OK!")
 
-            # salva o checkpoint no disco a cada 10 novos itens
-            if processados_nesta_sessao % 10 == 0 and processados_nesta_sessao > 0:
-                salvar_extracoes_checkpoint(checkpoint_file, extracoes)
-                print(f"[Checkpoint Salvo] Total registrado: {len(extracoes)} imoveis.")
+            # salva o checkpoint no disco a cada lote concluido
+            salvar_extracoes_checkpoint(checkpoint_file, extracoes)
 
+            # pausa entre lotes para respeitar rate limit
             time.sleep(sleep_between)
 
     except KeyboardInterrupt:
@@ -276,13 +320,19 @@ def fundir_extracoes_nos_csvs_processados() -> None:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Extrai caracteristicas estruturadas da descricao dos imoveis usando Groq LLM (Issue #9)."
+        description="Extrai caracteristicas estruturadas da descricao dos imoveis em lote usando Groq LLM (Issue #9)."
     )
     parser.add_argument(
         "--limit",
         type=int,
         default=None,
         help="Limita o numero de imoveis a processar (util para testes).",
+    )
+    parser.add_argument(
+        "--batch-size",
+        type=int,
+        default=5,
+        help="Numero de imoveis por requisicao de lote (default: 5 imoveis/lote).",
     )
     parser.add_argument(
         "--model",
@@ -293,8 +343,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--sleep",
         type=float,
-        default=1.2,
-        help="Segundos de pausa entre requisicoes para respeitar Rate Limit (default: 1.2s).",
+        default=1.5,
+        help="Segundos de pausa entre requisicoes de lote (default: 1.5s).",
     )
     parser.add_argument(
         "--dry-run",
@@ -318,6 +368,7 @@ def main() -> None:
     else:
         executar_pipeline_extracao_llm(
             limit=args.limit,
+            batch_size=args.batch_size,
             model=args.model,
             sleep_between=args.sleep,
             dry_run=args.dry_run,
