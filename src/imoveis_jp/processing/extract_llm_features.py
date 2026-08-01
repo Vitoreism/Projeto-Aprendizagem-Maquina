@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 """
-modulo de extracao via llm mantendo batch-size=6 estrito (98.5% riqueza) com paralelismo hiper acelerado de 60 workers simultaneos (issue #9)
+modulo de extracao via llm estrito sem falsos positivos em rate limit (issue #9)
+garante que em caso de 429 rate limit o lote permaneca pendente para reprocessamento real
 """
 
 from __future__ import annotations
@@ -137,7 +138,7 @@ def executar_descoberta_amostral(
             except Exception as e:
                 erro_str = str(e).lower()
                 if "429" in erro_str or "rate limit" in erro_str or "too many requests" in erro_str:
-                    sleep_time = 0.15 + random.uniform(0.05, 0.1)
+                    sleep_time = 0.5 + random.uniform(0.1, 0.3)
                     print(f"[Rate Limit 429] Rotacionando chave API Groq... (Tentativa {attempt + 1})", flush=True)
                     time.sleep(sleep_time)
                 else:
@@ -200,7 +201,7 @@ def extrair_lote_atributos_llm(
     lote_imoveis: List[Dict[str, Any]],
     atributos_dinamicos: List[str],
     model: str = "llama-3.1-8b-instant",
-    max_retries: int = 6,
+    max_retries: int = 15,
 ) -> Dict[str, Dict[str, Any]]:
     if not lote_imoveis:
         return {}
@@ -218,7 +219,7 @@ def extrair_lote_atributos_llm(
     clientes_atualizados = carregar_clientes_groq()
     pool_clientes = itertools.cycle(clientes_atualizados)
 
-    for attempt in range(max(max_retries, len(clientes_atualizados) * 2)):
+    for attempt in range(max(max_retries, len(clientes_atualizados) * 3)):
         client = next(pool_clientes)
         try:
             response = client.chat.completions.create(
@@ -252,15 +253,13 @@ def extrair_lote_atributos_llm(
         except Exception as e:
             erro_str = str(e).lower()
             if "429" in erro_str or "rate limit" in erro_str or "too many requests" in erro_str:
-                sleep_time = 0.1 + random.uniform(0.05, 0.1)
+                sleep_time = 0.5 + random.uniform(0.1, 0.3)
                 time.sleep(sleep_time)
             else:
-                time.sleep(0.15)
+                time.sleep(0.3)
 
-    res_falha = {}
-    for item in lote_imoveis:
-        res_falha[item["url_anuncio"]] = _retornar_atributos_padrao_dinamicos(atributos_dinamicos)
-    return res_falha
+    # se esgotar todas as retentativas, retorna vazio para que o lote permaneca pendente e nao salve lixo no disco
+    return {}
 
 
 def _sanitizar_resposta_dinamica(dados: Dict[str, Any], atributos_dinamicos: List[str]) -> Dict[str, Any]:
@@ -338,9 +337,9 @@ def salvar_extracoes_checkpoint(caminho: Path, dados: Dict[str, Dict[str, Any]])
 def executar_pipeline_extracao_llm(
     limit: Optional[int] = None,
     batch_size: int = 6,
-    workers: int = 60,
+    workers: int = 8,
     model: str = "llama-3.1-8b-instant",
-    sleep_between: float = 0.0,
+    sleep_between: float = 0.2,
     dry_run: bool = False,
     discover: bool = False,
     reset_checkpoint: bool = False,
@@ -371,7 +370,7 @@ def executar_pipeline_extracao_llm(
 
     atributos_dinamicos = carregar_atributos_do_ranking(min_frequencia=5)
 
-    print(f"[OK] Iniciando MODO RUSH MAXIMO RIGOROSO (batch-size=6 ESTRITO, 60 Workers Simultaneos, 98.5% Riqueza) ({len(imoveis)} imoveis)...", flush=True)
+    print(f"[OK] Iniciando Extracao Otimizada de Alta Precisao Real ({workers} Workers, batch-size={batch_size}) ({len(imoveis)} imoveis)...", flush=True)
     print(f"     Atributos Dinamicos Carregados: {len(atributos_dinamicos)} atributos reais!")
     print(f"     Pool de Chaves API: {len(clientes)} chaves ativas em rotacao")
     print(f"     Tamanho do Lote (Batching): {batch_size} imoveis por lote (ESTRITO PARA 98.5% RIQUEZA)")
@@ -413,12 +412,13 @@ def executar_pipeline_extracao_llm(
             concluidos = 0
             for future in as_completed(futures):
                 idx_lote, resultados_lote = future.result()
-                extracoes.update(resultados_lote)
-                concluidos += 1
-
-                if concluidos % 5 == 0 or concluidos == total_lotes:
-                    print(f"[{concluidos}/{total_lotes}] Lotes processados em paralelo ({len(extracoes)} imoveis salvos)... OK!", flush=True)
+                if resultados_lote:
+                    extracoes.update(resultados_lote)
                     salvar_extracoes_checkpoint(checkpoint_file, extracoes)
+                
+                concluidos += 1
+                if concluidos % 5 == 0 or concluidos == total_lotes:
+                    print(f"[{concluidos}/{total_lotes}] Lotes processados ({len(extracoes)} imoveis REAIS salvos)... OK!", flush=True)
 
     except KeyboardInterrupt:
         print("\n[Interrompido] Processamento interrompido pelo usuario. Salvando progresso...", flush=True)
@@ -493,7 +493,7 @@ def fundir_json_enriquecido_v2(atributos_dinamicos: Optional[List[str]] = None) 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Pipeline no Modo Rush Maximo com batch-size=6 estrito (60 workers paralelos) via Groq LLM (Issue #9)."
+        description="Pipeline estrito de alta precisao real (8 workers, batch-size=6) via Groq LLM (Issue #9)."
     )
     parser.add_argument(
         "--discover",
@@ -515,8 +515,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--workers",
         type=int,
-        default=60,
-        help="Numero de threads worker paralelas simultaneas (default: 60 threads).",
+        default=8,
+        help="Numero de threads worker paralelas simultaneas (default: 8 threads).",
     )
     parser.add_argument(
         "--model",
@@ -527,8 +527,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--sleep",
         type=float,
-        default=0.0,
-        help="Segundos de pausa entre requisicoes de lote (default: 0.0s).",
+        default=0.2,
+        help="Segundos de pausa entre requisicoes de lote (default: 0.2s).",
     )
     parser.add_argument(
         "--reset",
