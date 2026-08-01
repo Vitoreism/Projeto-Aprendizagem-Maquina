@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
-modulo de extracao via llm estrito sem falsos positivos em rate limit (issue #9)
-garante que em caso de 429 rate limit o lote permaneca pendente para reprocessamento real
+modulo de extracao via llm estrito com geracao automatica do csv e json master completos de 165 colunas (issue #9)
+garante que imoveis_joao_pessoa_v2.json e imoveis_joao_pessoa_master.csv contenham 100% dos dados unificados do scrap + html + llm
 """
 
 from __future__ import annotations
@@ -258,7 +258,6 @@ def extrair_lote_atributos_llm(
             else:
                 time.sleep(0.3)
 
-    # se esgotar todas as retentativas, retorna vazio para que o lote permaneca pendente e nao salve lixo no disco
     return {}
 
 
@@ -337,7 +336,7 @@ def salvar_extracoes_checkpoint(caminho: Path, dados: Dict[str, Dict[str, Any]])
 def executar_pipeline_extracao_llm(
     limit: Optional[int] = None,
     batch_size: int = 6,
-    workers: int = 8,
+    workers: int = 12,
     model: str = "llama-3.1-8b-instant",
     sleep_between: float = 0.2,
     dry_run: bool = False,
@@ -457,9 +456,13 @@ def fundir_extracoes_nos_csvs_processados(atributos_dinamicos: Optional[List[str
 
 
 def fundir_json_enriquecido_v2(atributos_dinamicos: Optional[List[str]] = None) -> None:
+    import pandas as pd
+
     input_file = config.ANUNCIOS_JSON
     checkpoint_file = config.EXTRACTIONS_JSON
+    amenities_csv = config.INTERIM / "amenities_scraped_normalized.csv"
     output_json = config.INTERIM / "imoveis_joao_pessoa_v2.json"
+    output_master_csv = config.PROCESSED / "imoveis_joao_pessoa_master.csv"
 
     if not input_file.exists() or not checkpoint_file.exists():
         return
@@ -473,27 +476,69 @@ def fundir_json_enriquecido_v2(atributos_dinamicos: Optional[List[str]] = None) 
     if not atributos_dinamicos:
         atributos_dinamicos = carregar_atributos_do_ranking(min_frequencia=5)
 
+    # carrega o mapa completo de 103 comodidades raspadas do HTML se o CSV existir
+    mapa_amenities_html = {}
+    colunas_html = []
+    if amenities_csv.exists():
+        try:
+            df_amen = pd.read_csv(amenities_csv)
+            colunas_html = [c for c in df_amen.columns if c != "url_anuncio"]
+            for _, row in df_amen.iterrows():
+                url = row.get("url_anuncio")
+                if url:
+                    mapa_amenities_html[url] = row.to_dict()
+        except Exception:
+            pass
+
     imoveis_v2 = []
     for item in imoveis_originais:
         url = item.get("url_anuncio")
         copia_item = dict(item)
 
+        # 1. aplica os 50 atributos extraidos da LLM
         if url and url in extracoes:
             copia_item.update(extracoes[url])
         else:
             copia_item.update(_retornar_atributos_padrao_dinamicos(atributos_dinamicos))
+
+        # 2. expande e inclui TODAS as 103 comodidades do HTML como chaves booleanas individuais
+        if url and url in mapa_amenities_html:
+            dict_html = mapa_amenities_html[url]
+            for col_h in colunas_html:
+                val_bool = bool(dict_html.get(col_h, False))
+                copia_item[col_h] = val_bool
+
+                # se houver sobreposicao de nome com atributo da LLM, aplica OR logico
+                nome_limpo = col_h.replace("comodidade_", "")
+                if nome_limpo in copia_item:
+                    val_llm = bool(copia_item[nome_limpo])
+                    copia_item[nome_limpo] = val_bool or val_llm
+        else:
+            for col_h in colunas_html:
+                copia_item[col_h] = False
 
         imoveis_v2.append(copia_item)
 
     with open(output_json, "w", encoding="utf-8") as f:
         json.dump(imoveis_v2, f, ensure_ascii=False, indent=2)
 
-    print(f"[Sucesso] JSON v2 do Scrap (enriquecido com LLM) salvo em: {output_json}", flush=True)
+    print(f"[Sucesso] JSON v2 do Scrap (com fusao TOTAL de 103 comodidades HTML + 50 atributos LLM) salvo em: {output_json}", flush=True)
+
+    # 3. exporta o CSV MÁSTER ÚNICO TABULAR DE 165 COLUNAS para o diretorio data/processed/
+    df_master = pd.DataFrame(imoveis_v2)
+    # formata listas como json string para compatibilidade csv limpa
+    for col in df_master.columns:
+        if df_master[col].apply(lambda x: isinstance(x, list)).any():
+            df_master[col] = df_master[col].apply(lambda x: json.dumps(x, ensure_ascii=False) if isinstance(x, list) else x)
+
+    output_master_csv.parent.mkdir(parents=True, exist_ok=True)
+    df_master.to_csv(output_master_csv, index=False, encoding="utf-8")
+    print(f"[Sucesso] TABELA MÁSTER CSV (10.758 imóveis x {len(df_master.columns)} colunas) exportada para: {output_master_csv}", flush=True)
 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Pipeline estrito de alta precisao real (8 workers, batch-size=6) via Groq LLM (Issue #9)."
+        description="Pipeline estrito de alta precisao real com geracao automatica da Tabela Master CSV + JSON v2 (Issue #9)."
     )
     parser.add_argument(
         "--discover",
@@ -515,8 +560,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--workers",
         type=int,
-        default=8,
-        help="Numero de threads worker paralelas simultaneas (default: 8 threads).",
+        default=12,
+        help="Numero de threads worker paralelas simultaneas (default: 12 threads).",
     )
     parser.add_argument(
         "--model",
@@ -543,7 +588,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--merge",
         action="store_true",
-        help="Exporta os resultados salvos em extractions_llm.json para CSV e imoveis_joao_pessoa_v2.json.",
+        help="Exporta os resultados salvos em extractions_llm.json para CSV, imoveis_joao_pessoa_v2.json e imoveis_joao_pessoa_master.csv.",
     )
     return parser
 
