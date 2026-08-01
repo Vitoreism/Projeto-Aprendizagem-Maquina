@@ -546,8 +546,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--workers",
         type=int,
-        default=4,
-        help="Numero de threads worker paralelas simultaneas (default: 4 threads leves).",
+        default=15,
+        help="Numero de threads worker paralelas simultaneas (default: 15 threads).",
     )
     parser.add_argument(
         "--model",
@@ -558,8 +558,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--sleep",
         type=float,
-        default=0.5,
-        help="Segundos de pausa entre requisicoes de lote (default: 0.5s).",
+        default=0.1,
+        help="Segundos de pausa entre requisicoes de lote (default: 0.1s).",
     )
     parser.add_argument(
         "--reset",
