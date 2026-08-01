@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
-modulo de extracao via llm estrito com geracao automatica do csv e json master completos de 165 colunas (issue #9)
-garante que imoveis_joao_pessoa_v2.json e imoveis_joao_pessoa_master.csv contenham 100% dos dados unificados do scrap + html + llm
+modulo de extracao via llm estrito compativel com a base do zapimoveis e chaves na mao (issue #9)
+expansao automatica de todas as comodidades em colunas booleanas individuais para ambas as bases
 """
 
 from __future__ import annotations
@@ -75,96 +75,21 @@ def carregar_clientes_groq() -> List[Any]:
     return clientes
 
 
-def executar_descoberta_amostral(
-    clientes: List[Any],
-    imoveis: List[Dict[str, Any]],
-    model: str = "llama-3.1-8b-instant",
-    batch_size: int = 5,
-) -> List[str]:
-    print(f"\n[Etapa 1] Iniciando Descoberta Empirica Total ({len(imoveis)} imoveis)...", flush=True)
-
-    contador_atributos: Counter = Counter()
-    amostras_salvas = {}
-    arquivo_ranking = config.INTERIM / "discovered_attributes_rank.json"
-
-    validos = [item for item in imoveis if item.get("url_anuncio") and len(item.get("descricao_completa", "").strip()) >= 15]
-    lotes = [validos[i : i + batch_size] for i in range(0, len(validos), batch_size)]
-    total_lotes = len(lotes)
-
-    pool_clientes = itertools.cycle(clientes)
-
-    for idx_lote, lote in enumerate(lotes):
-        print(f"[{idx_lote + 1}/{total_lotes}] Processando lote descoberta ({len(lote)} imoveis)...", end=" ", flush=True)
-
-        payload_prompt = []
-        for idx, item in enumerate(lote):
-            desc = item.get("descricao_completa", "").strip()[:1000]
-            payload_prompt.append({"id_lote": idx, "descricao": desc})
-
-        prompt_usuario = f"Lista de Imoveis:\n{json.dumps(payload_prompt, ensure_ascii=False)}"
-
-        sucesso_lote = False
-        for attempt in range(max(6, len(clientes) * 3)):
-            client = next(pool_clientes)
-            try:
-                response = client.chat.completions.create(
-                    messages=[
-                        {"role": "system", "content": SYSTEM_PROMPT_DISCOVERY_BATCH},
-                        {"role": "user", "content": prompt_usuario},
-                    ],
-                    model=model,
-                    temperature=0.2,
-                    response_format={"type": "json_object"},
-                )
-
-                conteudo = response.choices[0].message.content
-                dados = json.loads(conteudo)
-                lista_res = dados.get("resultados", [])
-
-                for res in lista_res:
-                    id_lote = res.get("id_lote")
-                    if id_lote is not None and 0 <= id_lote < len(lote):
-                        url = lote[id_lote]["url_anuncio"]
-                        atributos = res.get("atributos_encontrados", [])
-                        for at in atributos:
-                            if isinstance(at, str) and len(at.strip()) > 2:
-                                contador_atributos[at.strip().lower()] += 1
-                        amostras_salvas[url] = atributos
-
-                print("OK!", flush=True)
-                sucesso_lote = True
-                break
-
-            except Exception as e:
-                erro_str = str(e).lower()
-                if "429" in erro_str or "rate limit" in erro_str or "too many requests" in erro_str:
-                    sleep_time = 0.5 + random.uniform(0.1, 0.3)
-                    print(f"[Rate Limit 429] Rotacionando chave API Groq... (Tentativa {attempt + 1})", flush=True)
-                    time.sleep(sleep_time)
-                else:
-                    print(f"Erro: {e}", flush=True)
-                    break
-
-        if sucesso_lote:
-            resultado_ranking = {
-                "total_amostras_analisadas": len(amostras_salvas),
-                "ranking_frequencia": dict(contador_atributos.most_common(150)),
-            }
-            with open(arquivo_ranking, "w", encoding="utf-8") as f:
-                json.dump(resultado_ranking, f, ensure_ascii=False, indent=2)
-
-    print("\n" + "=" * 65, flush=True)
-    print("ETAPA 1 (DESCOBERTA EMPIRICA EM LOTE) CONCLUIDA COM SUCESSO!", flush=True)
-    print("=" * 65, flush=True)
-
-    atributos_relevantes = [at for at, count in contador_atributos.most_common(100) if len(at) > 2]
-    return atributos_relevantes
-
-
 def carregar_atributos_do_ranking(min_frequencia: int = 5) -> List[str]:
     arquivo_ranking = config.INTERIM / "discovered_attributes_rank.json"
     if not arquivo_ranking.exists():
-        return []
+        return [
+            "piscina", "academia", "cozinha", "apartamento", "wc_social", "elevador",
+            "salão_de_festas", "espaço_gourmet", "sala", "lavanderia", "área_de_serviço",
+            "varanda", "coworking", "conforto", "01_vaga_de_garagem", "churrasqueira",
+            "bicicletário", "posicao_solar_nascente", "lazer", "playground", "salão_de_jogos",
+            "vaga_de_garagem", "praticidade", "recepção", "terreo_com_area_privativa",
+            "segurança", "01_quarto", "quarto", "brinquedoteca", "aceita_fgts",
+            "restaurante", "aceita_permuta", "restaurantes", "automacao_residencial",
+            "em_construcao", "distancia_200m_da_praia", "entrega_em_2026",
+            "moveis_planejados_na_cozinha", "01_suíte", "lounge", "supermercados",
+            "praia", "localização_privilegiada", "suíte", "1_vaga_de_garagem"
+        ]
 
     with open(arquivo_ranking, "r", encoding="utf-8") as f:
         dados = json.load(f)
@@ -208,7 +133,7 @@ def extrair_lote_atributos_llm(
 
     payload_prompt = []
     for idx, item in enumerate(lote_imoveis):
-        desc = item.get("descricao_completa", "").strip()[:1000]
+        desc = str(item.get("descricao_completa", "")).strip()[:1000]
         if len(desc) < 10 or desc == "Descrição não encontrada.":
             desc = "sem descricao disponivel"
         payload_prompt.append({"id_lote": idx, "descricao": desc})
@@ -333,19 +258,78 @@ def salvar_extracoes_checkpoint(caminho: Path, dados: Dict[str, Dict[str, Any]])
             time.sleep(0.05)
 
 
+def obter_caminhos_dataset(dataset_name: str = "zap") -> tuple[Path, Path, Path, Path, Path]:
+    config.ensure_dirs()
+    if dataset_name.lower() in ("zap", "zapimoveis"):
+        input_file = config.RAW / "imoveis_joao_pessoa_zap.json"
+        if not input_file.exists():
+            src_zap = Path("src/scrapping/zap_imoveis/imoveis_joao_pessoa_zap.json")
+            if src_zap.exists():
+                input_file = src_zap
+        checkpoint_file = config.INTERIM / "extractions_llm_zap.json"
+        llm_csv = config.INTERIM / "llm_features_normalized_zap.csv"
+        output_json = config.INTERIM / "imoveis_joao_pessoa_zap_v2.json"
+        output_master_csv = config.PROCESSED / "imoveis_joao_pessoa_zap_master.csv"
+    else:
+        input_file = config.ANUNCIOS_JSON
+        checkpoint_file = config.EXTRACTIONS_JSON
+        llm_csv = config.INTERIM / "llm_features_normalized.csv"
+        output_json = config.INTERIM / "imoveis_joao_pessoa_v2.json"
+        output_master_csv = config.PROCESSED / "imoveis_joao_pessoa_master.csv"
+
+    return input_file, checkpoint_file, llm_csv, output_json, output_master_csv
+
+
+def extrair_mapa_comodidades_zap(imoveis: List[Dict[str, Any]]) -> tuple[Dict[str, Dict[str, bool]], List[str]]:
+    mapa_comodidades: Dict[str, Dict[str, bool]] = {}
+    todas_comodidades = set()
+
+    # 1. faz varredura completa em todos os imoveis para descobrir todas as comodidades unicas
+    for item in imoveis:
+        raw_str = item.get("comodidades_imovel", "")
+        if raw_str and isinstance(raw_str, str):
+            partes = [p.strip().lower() for p in raw_str.split(",") if p.strip()]
+            for p in partes:
+                if any(x in p for x in ["m²", "quarto", "banheiro", "vaga", "andar", "suíte"]):
+                    continue
+                nome_col = "comodidade_" + p.replace(" ", "_").replace("-", "_")
+                todas_comodidades.add(nome_col)
+
+    lista_colunas = sorted(list(todas_comodidades))
+
+    # 2. cria o mapeamento booleano individual para cada imovel
+    for item in imoveis:
+        url = item.get("url_anuncio")
+        if not url:
+            continue
+        dict_bool = {col: False for col in lista_colunas}
+        raw_str = item.get("comodidades_imovel", "")
+        if raw_str and isinstance(raw_str, str):
+            partes = [p.strip().lower() for p in raw_str.split(",") if p.strip()]
+            for p in partes:
+                if any(x in p for x in ["m²", "quarto", "banheiro", "vaga", "andar", "suíte"]):
+                    continue
+                nome_col = "comodidade_" + p.replace(" ", "_").replace("-", "_")
+                if nome_col in dict_bool:
+                    dict_bool[nome_col] = True
+
+        mapa_comodidades[url] = dict_bool
+
+    return mapa_comodidades, lista_colunas
+
+
 def executar_pipeline_extracao_llm(
+    dataset_name: str = "zap",
     limit: Optional[int] = None,
     batch_size: int = 6,
-    workers: int = 12,
+    workers: int = 15,
     model: str = "llama-3.1-8b-instant",
-    sleep_between: float = 0.2,
+    sleep_between: float = 0.1,
     dry_run: bool = False,
     discover: bool = False,
     reset_checkpoint: bool = False,
 ) -> None:
-    config.ensure_dirs()
-    input_file = config.ANUNCIOS_JSON
-    checkpoint_file = config.EXTRACTIONS_JSON
+    input_file, checkpoint_file, llm_csv, output_json, output_master_csv = obter_caminhos_dataset(dataset_name)
 
     if not input_file.exists():
         print(f"[Erro] Arquivo de entrada '{input_file}' nao foi encontrado.", flush=True)
@@ -364,12 +348,13 @@ def executar_pipeline_extracao_llm(
         return
 
     if reset_checkpoint and checkpoint_file.exists():
-        print("[Reset] Apagando checkpoint antigo para rodar o novo schema dinamico limpo...", flush=True)
+        print(f"[Reset] Apagando checkpoint antigo '{checkpoint_file.name}'...", flush=True)
         checkpoint_file.unlink()
 
     atributos_dinamicos = carregar_atributos_do_ranking(min_frequencia=5)
 
-    print(f"[OK] Iniciando Extracao Otimizada de Alta Precisao Real ({workers} Workers, batch-size={batch_size}) ({len(imoveis)} imoveis)...", flush=True)
+    print(f"[OK] Iniciando Extracao LLM para Dataset: '{dataset_name.upper()}' ({workers} Workers, batch-size={batch_size}) ({len(imoveis)} imoveis)...", flush=True)
+    print(f"     Arquivo de Entrada: {input_file}")
     print(f"     Atributos Dinamicos Carregados: {len(atributos_dinamicos)} atributos reais!")
     print(f"     Pool de Chaves API: {len(clientes)} chaves ativas em rotacao")
     print(f"     Tamanho do Lote (Batching): {batch_size} imoveis por lote (ESTRITO PARA 98.5% RIQUEZA)")
@@ -387,8 +372,8 @@ def executar_pipeline_extracao_llm(
     print(f"[Pendentes] Imoveis restantes a processar: {len(pendentes)}", flush=True)
 
     if not pendentes:
-        print("[Concluido] Todos os imoveis do escopo ja foram extraidos!", flush=True)
-        fundir_extracoes_nos_csvs_processados(atributos_dinamicos)
+        print(f"[Concluido] Todos os imoveis do dataset '{dataset_name}' ja foram extraidos!", flush=True)
+        fundir_extracoes_nos_csvs_processados(dataset_name, atributos_dinamicos)
         return
 
     lotes = [pendentes[i : i + batch_size] for i in range(0, len(pendentes), batch_size)]
@@ -423,14 +408,14 @@ def executar_pipeline_extracao_llm(
         print("\n[Interrompido] Processamento interrompido pelo usuario. Salvando progresso...", flush=True)
     finally:
         salvar_extracoes_checkpoint(checkpoint_file, extracoes)
-        fundir_extracoes_nos_csvs_processados(atributos_dinamicos)
+        fundir_extracoes_nos_csvs_processados(dataset_name, atributos_dinamicos)
         print(f"[Concluido] Sessao finalizada! Total em checkpoint: {len(extracoes)} imoveis.", flush=True)
 
 
-def fundir_extracoes_nos_csvs_processados(atributos_dinamicos: Optional[List[str]] = None) -> None:
+def fundir_extracoes_nos_csvs_processados(dataset_name: str = "zap", atributos_dinamicos: Optional[List[str]] = None) -> None:
     import pandas as pd
 
-    checkpoint_file = config.EXTRACTIONS_JSON
+    input_file, checkpoint_file, llm_csv, output_json, output_master_csv = obter_caminhos_dataset(dataset_name)
 
     if not checkpoint_file.exists():
         print(f"[Aviso] Nenhuma extracao encontrada em '{checkpoint_file}'. Execute a extracao primeiro.", flush=True)
@@ -447,22 +432,18 @@ def fundir_extracoes_nos_csvs_processados(atributos_dinamicos: Optional[List[str
     df_extra.index.name = "url_anuncio"
     df_extra.reset_index(inplace=True)
 
-    caminho_saida = config.INTERIM / "llm_features_normalized.csv"
-    df_extra.to_csv(caminho_saida, index=False, encoding="utf-8")
-    print(f"[Sucesso] Atributos extraidos via LLM exportados para CSV: {caminho_saida}", flush=True)
+    df_extra.to_csv(llm_csv, index=False, encoding="utf-8")
+    print(f"[Sucesso] Atributos extraidos via LLM exportados para CSV: {llm_csv}", flush=True)
     print(f"          Total de registros normalizados: {len(df_extra)}", flush=True)
 
-    fundir_json_enriquecido_v2(atributos_dinamicos)
+    fundir_json_enriquecido_v2(dataset_name, atributos_dinamicos)
 
 
-def fundir_json_enriquecido_v2(atributos_dinamicos: Optional[List[str]] = None) -> None:
+def fundir_json_enriquecido_v2(dataset_name: str = "zap", atributos_dinamicos: Optional[List[str]] = None) -> None:
     import pandas as pd
 
-    input_file = config.ANUNCIOS_JSON
-    checkpoint_file = config.EXTRACTIONS_JSON
+    input_file, checkpoint_file, llm_csv, output_json, output_master_csv = obter_caminhos_dataset(dataset_name)
     amenities_csv = config.INTERIM / "amenities_scraped_normalized.csv"
-    output_json = config.INTERIM / "imoveis_joao_pessoa_v2.json"
-    output_master_csv = config.PROCESSED / "imoveis_joao_pessoa_master.csv"
 
     if not input_file.exists() or not checkpoint_file.exists():
         return
@@ -476,39 +457,39 @@ def fundir_json_enriquecido_v2(atributos_dinamicos: Optional[List[str]] = None) 
     if not atributos_dinamicos:
         atributos_dinamicos = carregar_atributos_do_ranking(min_frequencia=5)
 
-    # carrega o mapa completo de 103 comodidades raspadas do HTML se o CSV existir
     mapa_amenities_html = {}
     colunas_html = []
-    if amenities_csv.exists():
-        try:
-            df_amen = pd.read_csv(amenities_csv)
-            colunas_html = [c for c in df_amen.columns if c != "url_anuncio"]
-            for _, row in df_amen.iterrows():
-                url = row.get("url_anuncio")
-                if url:
-                    mapa_amenities_html[url] = row.to_dict()
-        except Exception:
-            pass
+
+    if dataset_name.lower() in ("zap", "zapimoveis"):
+        mapa_amenities_html, colunas_html = extrair_mapa_comodidades_zap(imoveis_originais)
+    else:
+        if amenities_csv.exists():
+            try:
+                df_amen = pd.read_csv(amenities_csv)
+                colunas_html = [c for c in df_amen.columns if c != "url_anuncio"]
+                for _, row in df_amen.iterrows():
+                    url = row.get("url_anuncio")
+                    if url:
+                        mapa_amenities_html[url] = row.to_dict()
+            except Exception:
+                pass
 
     imoveis_v2 = []
     for item in imoveis_originais:
         url = item.get("url_anuncio")
         copia_item = dict(item)
 
-        # 1. aplica os 50 atributos extraidos da LLM
         if url and url in extracoes:
             copia_item.update(extracoes[url])
         else:
             copia_item.update(_retornar_atributos_padrao_dinamicos(atributos_dinamicos))
 
-        # 2. expande e inclui TODAS as 103 comodidades do HTML como chaves booleanas individuais
         if url and url in mapa_amenities_html:
             dict_html = mapa_amenities_html[url]
             for col_h in colunas_html:
                 val_bool = bool(dict_html.get(col_h, False))
                 copia_item[col_h] = val_bool
 
-                # se houver sobreposicao de nome com atributo da LLM, aplica OR logico
                 nome_limpo = col_h.replace("comodidade_", "")
                 if nome_limpo in copia_item:
                     val_llm = bool(copia_item[nome_limpo])
@@ -522,23 +503,28 @@ def fundir_json_enriquecido_v2(atributos_dinamicos: Optional[List[str]] = None) 
     with open(output_json, "w", encoding="utf-8") as f:
         json.dump(imoveis_v2, f, ensure_ascii=False, indent=2)
 
-    print(f"[Sucesso] JSON v2 do Scrap (com fusao TOTAL de 103 comodidades HTML + 50 atributos LLM) salvo em: {output_json}", flush=True)
+    print(f"[Sucesso] JSON v2 ({dataset_name.upper()}) salvo em: {output_json}", flush=True)
 
-    # 3. exporta o CSV MÁSTER ÚNICO TABULAR DE 165 COLUNAS para o diretorio data/processed/
     df_master = pd.DataFrame(imoveis_v2)
-    # formata listas como json string para compatibilidade csv limpa
     for col in df_master.columns:
         if df_master[col].apply(lambda x: isinstance(x, list)).any():
             df_master[col] = df_master[col].apply(lambda x: json.dumps(x, ensure_ascii=False) if isinstance(x, list) else x)
 
     output_master_csv.parent.mkdir(parents=True, exist_ok=True)
     df_master.to_csv(output_master_csv, index=False, encoding="utf-8")
-    print(f"[Sucesso] TABELA MÁSTER CSV (10.758 imóveis x {len(df_master.columns)} colunas) exportada para: {output_master_csv}", flush=True)
+    print(f"[Sucesso] TABELA MÁSTER CSV ({dataset_name.upper()}: {len(df_master)} imóveis x {len(df_master.columns)} colunas) exportada para: {output_master_csv}", flush=True)
 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Pipeline estrito de alta precisao real com geracao automatica da Tabela Master CSV + JSON v2 (Issue #9)."
+        description="Pipeline de extracao via LLM e unificacao master para ZapImoveis e Chaves na Mao (Issue #9)."
+    )
+    parser.add_argument(
+        "--dataset",
+        type=str,
+        default="zap",
+        choices=["zap", "chaves"],
+        help="Escolhe o dataset a processar: 'zap' (ZapImoveis 11.841 imoveis) ou 'chaves' (Chaves na Mao 10.758 imoveis). Default: zap.",
     )
     parser.add_argument(
         "--discover",
@@ -560,8 +546,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--workers",
         type=int,
-        default=12,
-        help="Numero de threads worker paralelas simultaneas (default: 12 threads).",
+        default=15,
+        help="Numero de threads worker paralelas simultaneas (default: 15 threads).",
     )
     parser.add_argument(
         "--model",
@@ -572,8 +558,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--sleep",
         type=float,
-        default=0.2,
-        help="Segundos de pausa entre requisicoes de lote (default: 0.2s).",
+        default=0.1,
+        help="Segundos de pausa entre requisicoes de lote (default: 0.1s).",
     )
     parser.add_argument(
         "--reset",
@@ -588,7 +574,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--merge",
         action="store_true",
-        help="Exporta os resultados salvos em extractions_llm.json para CSV, imoveis_joao_pessoa_v2.json e imoveis_joao_pessoa_master.csv.",
+        help="Exporta os resultados salvos em extractions_llm para CSV e master CSV do dataset escolhido.",
     )
     return parser
 
@@ -598,9 +584,10 @@ def main() -> None:
     args = parser.parse_args()
 
     if args.merge:
-        fundir_extracoes_nos_csvs_processados()
+        fundir_extracoes_nos_csvs_processados(dataset_name=args.dataset)
     else:
         executar_pipeline_extracao_llm(
+            dataset_name=args.dataset,
             limit=args.limit,
             batch_size=args.batch_size,
             workers=args.workers,
