@@ -38,7 +38,7 @@ class UrlStrategyBuilder:
         # 2. Busca Subdividida por Bairro + Faixa de Preço
         for bairro in BAIRROS_JOAO_PESSOA:
             bairro_slug = bairro.strip().lower()
-            bairro_base_url = f"https://www.zapimoveis.com.br/venda/apartamentos/pb+joao-pessoa+{bairro_slug}"
+            bairro_base_url = f"https://www.zapimoveis.com.br/venda/apartamentos/pb+joao-pessoa++{bairro_slug}"
             
             for faixa in FAIXAS_PRECO:
                 params = self._format_price_params(faixa["min"], faixa["max"])

@@ -1,12 +1,12 @@
 import os
 import time
 import random
-from typing import List, Tuple
+from typing import List, Tuple, Optional
 from playwright.sync_api import sync_playwright, Browser, BrowserContext, Page
 
 try:
     from .config import (
-        USER_AGENT, EXTRA_HEADERS, TAMANHO_LOTE,
+        DIR_ATUAL, USER_AGENT, EXTRA_HEADERS, TAMANHO_LOTE,
         PAUSA_ENTRE_IMOVEIS_SEC, ARQUIVO_SAIDA,
         INTERVALO_PAUSA_LONGA_IMOVEIS, PAUSA_LONGA_DURACAO_SEC,
         STORAGE_STATE_FILE, CONTEXT_RECYCLE_EVERY, MAX_RETRIES_PER_URL
@@ -22,7 +22,7 @@ try:
     from .rate_limiter import AdaptiveRateLimiter
 except ImportError:
     from config import (
-        USER_AGENT, EXTRA_HEADERS, TAMANHO_LOTE,
+        DIR_ATUAL, USER_AGENT, EXTRA_HEADERS, TAMANHO_LOTE,
         PAUSA_ENTRE_IMOVEIS_SEC, ARQUIVO_SAIDA,
         INTERVALO_PAUSA_LONGA_IMOVEIS, PAUSA_LONGA_DURACAO_SEC,
         STORAGE_STATE_FILE, CONTEXT_RECYCLE_EVERY, MAX_RETRIES_PER_URL
@@ -51,13 +51,49 @@ class ScraperEngine:
         url_builder: UrlStrategyBuilder = None,
         tracker: ProgressTracker = None,
         controller: ExecutionController = None,
-        logger: LoggerManager = None
+        logger: LoggerManager = None,
+        worker_id: int = 1,
+        total_workers: int = 1,
+        partition_range: Optional[Tuple[int, int]] = None,
+        strategy: str = "block"
     ):
-        self.storage = storage or StorageManager()
+        self.worker_id = worker_id
+        self.total_workers = total_workers
+        self.partition_range = partition_range
+        self.strategy = strategy
+
+        if partition_range:
+            suffix = f"_p{partition_range[0]}_{partition_range[1]}"
+            if total_workers > 1:
+                suffix = f"_w{worker_id}_p{partition_range[0]}_{partition_range[1]}"
+            out_file = os.path.join(DIR_ATUAL, f"imoveis_joao_pessoa_zap{suffix}.json")
+            log_file = os.path.join(DIR_ATUAL, f"scraping{suffix}.log")
+            report_file = os.path.join(DIR_ATUAL, f"execution_report{suffix}.json")
+            pause_file = os.path.join(DIR_ATUAL, f"pause{suffix}.flag")
+            self.storage_state_file = os.path.join(DIR_ATUAL, f"session_state{suffix}.json")
+        elif total_workers > 1:
+            suffix = f"_w{worker_id}"
+            out_file = os.path.join(DIR_ATUAL, f"imoveis_joao_pessoa_zap{suffix}.json")
+            log_file = os.path.join(DIR_ATUAL, f"scraping{suffix}.log")
+            report_file = os.path.join(DIR_ATUAL, f"execution_report{suffix}.json")
+            pause_file = os.path.join(DIR_ATUAL, f"pause{suffix}.flag")
+            self.storage_state_file = os.path.join(DIR_ATUAL, f"session_state{suffix}.json")
+        else:
+            try:
+                from .config import LOG_FILE, REPORT_FILE, PAUSE_FLAG_FILE
+            except ImportError:
+                from config import LOG_FILE, REPORT_FILE, PAUSE_FLAG_FILE
+            out_file = ARQUIVO_SAIDA
+            log_file = LOG_FILE
+            report_file = REPORT_FILE
+            pause_file = PAUSE_FLAG_FILE
+            self.storage_state_file = STORAGE_STATE_FILE
+
+        self.storage = storage or StorageManager(file_path=out_file)
         self.url_builder = url_builder or UrlStrategyBuilder()
         self.tracker = tracker or ProgressTracker()
-        self.controller = controller or ExecutionController()
-        self.logger = logger or LoggerManager()
+        self.controller = controller or ExecutionController(pause_file=pause_file)
+        self.logger = logger or LoggerManager(log_path=log_file, report_path=report_file)
         self.extractor = PropertyExtractor()
         self.rate_limiter = AdaptiveRateLimiter()
 
@@ -85,9 +121,9 @@ class ScraperEngine:
             'extra_http_headers': EXTRA_HEADERS
         }
         
-        if os.path.exists(STORAGE_STATE_FILE):
+        if os.path.exists(self.storage_state_file):
             try:
-                context_kwargs['storage_state'] = STORAGE_STATE_FILE
+                context_kwargs['storage_state'] = self.storage_state_file
             except Exception:
                 pass
 
@@ -102,7 +138,7 @@ class ScraperEngine:
         """Persiste os cookies e localStorage da sessão ativa no disco."""
         try:
             if context:
-                context.storage_state(path=STORAGE_STATE_FILE)
+                context.storage_state(path=self.storage_state_file)
         except Exception as e:
             self.logger.log(f"Aviso ao salvar sessão: {e}", level="WARN", print_console=False)
 
@@ -127,15 +163,47 @@ class ScraperEngine:
 
     def run(self):
         """Executa a pipeline completa de raspagem por partições com resiliência enterprise."""
-        self.logger.log_phase("INICIALIZAÇÃO", "Carregando estado do scraper, sessão e base existente")
+        self.logger.log_phase("INICIALIZAÇÃO", f"Carregando estado do scraper (Trabalhador {self.worker_id}/{self.total_workers})")
         self.logger.log(f"Arquivo de saída: {self.storage.file_path}")
         self.logger.log(f"Imóveis pré-existentes na base: {self.storage.get_total_collected()}")
 
-        partitions = self.url_builder.build_partitions()
-        self.logger.log(f"154 partições de busca geradas (Bairros x Faixas de Preço).")
+        all_partitions = self.url_builder.build_partitions()
+        n = len(all_partitions)
+
+        if self.partition_range:
+            start_p, end_p = self.partition_range
+            start_p = max(1, start_p)
+            end_p = min(n, end_p)
+            sub_list = all_partitions[start_p - 1:end_p]
+            if self.total_workers > 1:
+                if self.strategy == "interleaved":
+                    partitions = sub_list[self.worker_id - 1::self.total_workers]
+                    self.logger.log(f"[TRABALHADOR {self.worker_id}/{self.total_workers} - INTERCALADO] Processando {len(partitions)} das partições da faixa #{start_p} a #{end_p}.")
+                else:
+                    k, m = divmod(len(sub_list), self.total_workers)
+                    start = (self.worker_id - 1) * k + min(self.worker_id - 1, m)
+                    end = start + k + (1 if self.worker_id - 1 < m else 0)
+                    partitions = sub_list[start:end]
+                    self.logger.log(f"[TRABALHADOR {self.worker_id}/{self.total_workers} - BLOCO] Processando {len(partitions)} partições da faixa #{start_p} a #{end_p}.")
+            else:
+                partitions = sub_list
+                self.logger.log(f"[FAIXA ESPECÍFICA DE PARTIÇÕES] Processando {len(partitions)} partições (Faixa #{start_p} a #{end_p}).")
+        elif self.total_workers > 1:
+            if self.strategy == "interleaved":
+                partitions = all_partitions[self.worker_id - 1::self.total_workers]
+                self.logger.log(f"[TRABALHADOR {self.worker_id}/{self.total_workers} - INTERCALADO] Processando {len(partitions)} das {n} partições totais.")
+            else:
+                k, m = divmod(n, self.total_workers)
+                start = (self.worker_id - 1) * k + min(self.worker_id - 1, m)
+                end = start + k + (1 if self.worker_id - 1 < m else 0)
+                partitions = all_partitions[start:end]
+                self.logger.log(f"[TRABALHADOR {self.worker_id}/{self.total_workers} - BLOCO] Processando {len(partitions)} das {n} partições totais (Partições #{start+1} a #{end}).")
+        else:
+            partitions = all_partitions
+            self.logger.log(f"{len(partitions)} partições de busca geradas (Bairros x Faixas de Preço).")
 
         self.logger.log_phase("EXECUÇÃO", "Iniciando raspagem particionada das URLs e dados com resiliência")
-        self.tracker.start()
+        self.tracker.start(len(partitions))
 
         with sync_playwright() as p:
             browser = p.chromium.launch(
@@ -156,6 +224,9 @@ class ScraperEngine:
 
                 self.controller.check_pause()
                 self.logger.log_partition_start(p_idx, len(partitions), partition.label)
+
+                # Atualiza memória de deduplicação cruzada (base acumulada + outros workers)
+                self.storage.refresh_indices()
 
                 total_pages = collector.detect_partition_pages(partition.url)
                 print(f"   Páginas detectadas: ~{total_pages}")
@@ -181,6 +252,9 @@ class ScraperEngine:
                 unique_partition_links = list(dict.fromkeys(partition_links))
                 self.logger.log_partition_result(partition.label, total_pages, len(unique_partition_links), len(partition_links))
                 print(f"   [+] {len(unique_partition_links)} novos links para extrair nesta partição.")
+
+                # Inicia o rastreamento da partição no ProgressTracker
+                self.tracker.start_partition(p_idx, len(partitions), partition.label, len(unique_partition_links))
 
                 # Extrai dados dos imóveis da partição com Fila de Retentativas e Circuit Breaker
                 for l_idx, link in enumerate(unique_partition_links, 1):
@@ -272,14 +346,8 @@ class ScraperEngine:
                                 self.logger.log_extraction(l_idx, len(unique_partition_links), link, False, str(e))
                                 break
 
-                    # Atualiza o rastreador e relógio ETA
-                    self.tracker.update(
-                        processed=total_processed,
-                        saved=self.storage.get_total_collected(),
-                        total_estimated=len(unique_partition_links) * len(partitions),
-                        current_partition=partition.label
-                    )
-                    
+                    # Registra o imóvel processado e imprime o relógio com duplo ETA
+                    self.tracker.record_item_processed(saved_items=self.storage.get_total_collected())
                     status_prefix = " [DESACELERADO]" if self.rate_limiter.is_throttled() else ""
                     self.tracker.print_progress_bar(f"[{l_idx}/{len(unique_partition_links)}]{status_prefix} {info_msg}")
 
@@ -289,6 +357,9 @@ class ScraperEngine:
                         self._save_session_state(context)
                         self.logger.log_checkpoint(saved_count, self.storage.get_total_collected())
                         self.current_batch.clear()
+
+                # Notifica término da partição ao tracker
+                self.tracker.finish_partition()
 
             # Salva lote remanescente e sessão final
             self._save_session_state(context)
@@ -307,6 +378,10 @@ class ScraperEngine:
         # Utiliza o AdaptiveRateLimiter para calcular o delay dinâmico
         self.rate_limiter.wait(PAUSA_ENTRE_IMOVEIS_SEC)
 
+        if self.total_workers > 1:
+            # Jitter aleatório para dessincronizar múltiplos trabalhadores na mesma rede/IP
+            time.sleep(random.uniform(0.5, 1.5))
+
         # Pausa longa de leitura a cada N imóveis
         break_trigger = random.randint(*INTERVALO_PAUSA_LONGA_IMOVEIS)
         if index > 0 and index % break_trigger == 0:
@@ -322,8 +397,3 @@ class ScraperEngine:
             time.sleep(random.uniform(0.5, 1.1))
         except Exception:
             pass
-
-
-if __name__ == "__main__":
-    engine = ScraperEngine()
-    engine.run()

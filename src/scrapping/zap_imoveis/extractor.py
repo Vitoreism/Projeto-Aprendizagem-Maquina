@@ -45,6 +45,12 @@ class PropertyExtractor:
             # Comodidades
             self._extract_features(soup, dados)
 
+            # Descrição do Imóvel
+            dados['descricao_completa'] = self._extract_description(soup)
+
+            # Preenchimento inteligente de lacunas (fallback via descrição)
+            self._fill_missing_from_description(dados)
+
             # Validação de Qualidade Mínima:
             # Se não extraiu pelo menos preço, endereço ou título válido, considera a extração falha.
             tem_dados_validos = any([
@@ -84,7 +90,7 @@ class PropertyExtractor:
             if 'iptu' not in dados:
                 match_iptu = re.search(r'IPTU\s*R\$\s*([\d\.]+)', soup.get_text(), re.I)
                 dados['iptu'] = match_iptu.group(1) if match_iptu else None
-        except Exception as e:
+        except Exception:
             dados.setdefault('preco_venda', None)
 
     def _extract_address(self, soup: BeautifulSoup, dados: Dict[str, Any]) -> None:
@@ -94,12 +100,16 @@ class PropertyExtractor:
                 end_texto = tag_addr.get_text(strip=True)
                 dados['endereco_completo'] = end_texto
                 
-                match_bairro = re.search(r'-\s*([^,]+),\s*Jo[aã]o Pessoa', end_texto, re.I)
+                # Regex flexível para extração do bairro
+                match_bairro = re.search(r'(?:-\s*|,?\s*)([^,-]+),\s*(?:Jo[aã]o Pessoa|PB)', end_texto, re.I)
                 if match_bairro:
                     dados['bairro'] = match_bairro.group(1).strip()
                 else:
-                    partes = end_texto.split('-')
-                    dados['bairro'] = partes[-1].replace('João Pessoa', '').replace('PB', '').strip(', ') if len(partes) > 1 else None
+                    partes = [p.strip() for p in end_texto.split(',') if p.strip()]
+                    if len(partes) >= 2:
+                        dados['bairro'] = partes[-2].replace('João Pessoa', '').replace('PB', '').strip('- ')
+                    else:
+                        dados['bairro'] = None
             else:
                 dados['endereco_completo'] = None
                 dados['bairro'] = None
@@ -114,7 +124,9 @@ class PropertyExtractor:
                 txt = item.get_text(strip=True)
                 txt_norm = txt.lower()
                 
-                if 'quarto' in txt_norm:
+                if 'suítes' in txt_norm or 'suite' in txt_norm:
+                    dados['suites'] = re.sub(r'[^\d]', '', txt)
+                elif 'quarto' in txt_norm:
                     dados['quartos'] = re.sub(r'[^\d]', '', txt)
                 elif 'banheiro' in txt_norm:
                     dados['banheiros'] = re.sub(r'[^\d]', '', txt)
@@ -148,6 +160,7 @@ class PropertyExtractor:
 
             anunc_tag = soup.select_one(SELECTORS['anunciante']) or soup.select_one("[class*='advertiser']")
             dados['anunciante'] = anunc_tag.get_text(strip=True) if anunc_tag else None
+
         except Exception:
             dados.setdefault('codigo_imovel', None)
             dados.setdefault('anunciante', None)
@@ -166,6 +179,28 @@ class PropertyExtractor:
             return desc_tag.get_text(separator='\n', strip=True) if desc_tag else 'Descrição não encontrada.'
         except Exception:
             return 'Descrição não encontrada.'
+
+    def _fill_missing_from_description(self, dados: Dict[str, Any]) -> None:
+        """Preenche campos estruturados que ficaram nulos buscando padrões regex no texto da descrição."""
+        desc = dados.get('descricao_completa', '')
+        if not desc or desc == 'Descrição não encontrada.':
+            return
+
+        if not dados.get('quartos'):
+            m = re.search(r'(\d+)\s*(?:quarto|dormit[óo]rio)', desc, re.I)
+            if m: dados['quartos'] = m.group(1)
+
+        if not dados.get('banheiros'):
+            m = re.search(r'(\d+)\s*(?:banheiro|wc|su[íi]te)', desc, re.I)
+            if m: dados['banheiros'] = m.group(1)
+
+        if not dados.get('vagas'):
+            m = re.search(r'(\d+)\s*(?:vaga|garagem|garagens)', desc, re.I)
+            if m: dados['vagas'] = m.group(1)
+
+        if not dados.get('area_util'):
+            m = re.search(r'(\d+(?:[\.,]\d+)?)\s*(?:m²|m2|metros\s+quadrados)', desc, re.I)
+            if m: dados['area_util'] = m.group(1).replace(',', '.')
 
     def _extract_title(self, soup: BeautifulSoup, url: str) -> str:
         """Extrai o título com seletores hierárquicos e fallback pela URL."""

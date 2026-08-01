@@ -38,28 +38,47 @@ EXTRA_HEADERS = {
 }
 
 # Principais Bairros de João Pessoa (PB) para subdivisão de busca
+# Slugs validados empiricamente via HTTP contra o Zap Imóveis (HTTP 404 = inválido)
 BAIRROS_JOAO_PESSOA = [
+    # --- Bairros costeiros (alta densidade de anúncios) ---
     "bessa",
     "manaira",
     "tambau",
     "cabo-branco",
     "altiplano-cabo-branco",
-    "jardim-oceania",
     "aeroclube",
-    "intermares",
+    "tambauzinho",
+    "brisamar",
+
+    # --- Bairros interiores validados ---
     "portal-do-sol",
     "mangabeira",
     "miramar",
     "estados",
     "expedicionarios",
     "torre",
-    "bairro-dos-ipês",
-    "tambauzinho",
-    "bessa-mar",
+    "ipes",               # Era "bairro-dos-ipês" (404) → corrigido empiricamente
     "cristo-redentor",
-    "bessa",
-    "bayeux",
-    "cabedelo"
+    "bancarios",
+    "agua-fria",
+    "gramame",
+    "castelo-branco",
+    "pedro-gondim",
+    "centro",
+    "jaguaribe",
+    "cuia",
+    "funcionarios",
+    "rangel",
+    "grotao",
+    "penha",
+
+    # REMOVIDOS (HTTP 404 - slug inválido no Zap Imóveis):
+    # "jardim-oceania"    → 404 (propriedades capturadas via outras partições)
+    # "intermares"        → 404 em todas as variantes testadas
+    # "bessa-mar"         → 404 (não é bairro indexado separadamente)
+    # "bayeux"            → cidade diferente de João Pessoa
+    # "cabedelo"          → cidade diferente de João Pessoa
+    # "bessa" (2ª vez)    → duplicata removida
 ]
 
 # Faixas de preço para refinamento de busca (em Reais)
