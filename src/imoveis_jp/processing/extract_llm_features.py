@@ -282,6 +282,105 @@ def salvar_extracoes_checkpoint(caminho: Path, dados: Dict[str, Dict[str, Any]])
             time.sleep(0.05)
 
 
+def executar_descoberta_amostral(
+    clientes: List[Any],
+    imoveis: List[Dict[str, Any]],
+    model: str = "llama-3.1-8b-instant",
+    batch_size: int = 5,
+    max_retries: int = 10,
+) -> Counter:
+    """Etapa 1: descobre empiricamente quais atributos as descricoes citam.
+
+    Em vez de decidir na mao o que extrair, le uma amostra com o prompt aberto
+    (SYSTEM_PROMPT_DISCOVERY_BATCH) e conta a frequencia de cada termo. O
+    ranking resultante alimenta carregar_atributos_do_ranking, que hoje cai
+    numa lista fixa de 45 atributos quando o arquivo nao existe.
+
+    A funcao tinha sido perdida numa reorganizacao anterior -- sobrou a chamada
+    em executar_pipeline_extracao_llm, que quebrava com NameError ao usar
+    --discover. Reescrita a partir do contrato dos dois lados: o prompt que
+    ficou orfao no modulo e o formato que o leitor do ranking espera.
+    """
+    amostra = [i for i in imoveis if i.get("url_anuncio") and _tem_descricao_util(i)]
+    if not amostra:
+        print("[Erro] Nenhum imovel da amostra tem descricao utilizavel.", flush=True)
+        return Counter()
+
+    print(
+        f"[Descoberta] {len(amostra)} imoveis com descricao, em lotes de {batch_size}.",
+        flush=True,
+    )
+
+    contador: Counter = Counter()
+    pool = itertools.cycle(clientes or carregar_clientes_groq())
+    lotes = [amostra[i : i + batch_size] for i in range(0, len(amostra), batch_size)]
+    vazios = 0
+
+    for n, lote in enumerate(lotes, start=1):
+        payload = [
+            {"id_lote": idx, "descricao": str(item.get("descricao_completa", "")).strip()[:1000]}
+            for idx, item in enumerate(lote)
+        ]
+
+        resultados: List[Dict[str, Any]] = []
+        for _ in range(max_retries):
+            try:
+                resposta = next(pool).chat.completions.create(
+                    messages=[
+                        {"role": "system", "content": SYSTEM_PROMPT_DISCOVERY_BATCH},
+                        {"role": "user", "content": json.dumps(payload, ensure_ascii=False)},
+                    ],
+                    model=model,
+                    temperature=0.1,
+                    response_format={"type": "json_object"},
+                )
+                resultados = json.loads(resposta.choices[0].message.content).get("resultados", [])
+                break
+            except Exception as e:
+                if "rate limit" in str(e).lower() or "429" in str(e):
+                    time.sleep(0.5 + random.uniform(0.1, 0.3))
+                else:
+                    time.sleep(0.3)
+
+        if not resultados:
+            vazios += 1
+            continue
+
+        for item_res in resultados:
+            for termo in item_res.get("atributos_encontrados", []) or []:
+                if isinstance(termo, str) and len(termo.strip()) > 2:
+                    contador[termo.strip().lower()] += 1
+
+        if n % 10 == 0 or n == len(lotes):
+            print(f"[Descoberta] {n}/{len(lotes)} lotes | {len(contador)} termos distintos", flush=True)
+
+    if vazios:
+        print(f"[Aviso] {vazios} lote(s) nao retornaram resultado aproveitavel.", flush=True)
+
+    destino = config.INTERIM / "discovered_attributes_rank.json"
+    destino.parent.mkdir(parents=True, exist_ok=True)
+    with open(destino, "w", encoding="utf-8") as f:
+        json.dump(
+            {
+                "imoveis_amostrados": len(amostra),
+                "lotes_sem_resposta": vazios,
+                # ordenado por frequencia: carregar_atributos_do_ranking corta
+                # nos 45 primeiros, entao a ordem e o que decide o schema.
+                "ranking_frequencia": dict(contador.most_common()),
+            },
+            f,
+            ensure_ascii=False,
+            indent=2,
+        )
+
+    print(f"\n[Descoberta] Ranking salvo em: {destino}", flush=True)
+    print(f"[Descoberta] {len(contador)} termos distintos. Top 15:", flush=True)
+    for termo, freq in contador.most_common(15):
+        print(f"    {termo:45s} {freq:5d}", flush=True)
+
+    return contador
+
+
 def obter_caminhos_dataset(dataset_name: str = "zap") -> tuple[Path, Path, Path, Path, Path]:
     config.ensure_dirs()
     if dataset_name.lower() in ("zap", "zapimoveis"):
