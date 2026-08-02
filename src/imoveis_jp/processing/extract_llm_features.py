@@ -343,7 +343,10 @@ def executar_pipeline_extracao_llm(
     if limit:
         imoveis = imoveis[:limit]
 
-    clientes = carregar_clientes_groq()
+    # o dry-run existe justamente para conferir o plano ANTES de ter credencial,
+    # entao carregar as chaves aqui (com sys.exit se faltar) tornava a flag
+    # inutil. sem chave, a contagem do pool aparece como 0.
+    clientes = [] if dry_run else carregar_clientes_groq()
 
     if discover:
         executar_descoberta_amostral(clientes=clientes, imoveis=imoveis, model=model, batch_size=5)

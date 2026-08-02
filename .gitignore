@@ -34,3 +34,5 @@ desktop.ini
 # credenciais e variáveis de ambiente
 .env
 .env.*
+# o modelo sem segredo nenhum é a exceção: ele precisa ir para o git
+!.env.example
