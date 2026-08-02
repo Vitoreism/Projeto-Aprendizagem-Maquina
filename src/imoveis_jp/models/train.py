@@ -11,7 +11,7 @@ tocado uma unica vez, no fim.
 from __future__ import annotations
 
 import json
-from typing import Dict, List, Tuple
+from typing import Dict, List
 
 import numpy as np
 import pandas as pd
@@ -104,7 +104,13 @@ def executar() -> pd.DataFrame:
 
     linhas = []
     for nome, modelo in modelos.items():
-        # a CV reajusta imputacao e escala dentro de cada fold
+        # a CV reajusta imputacao e escala dentro de cada fold.
+        #
+        # folds em serie de proposito: o HistGradientBoosting ja e multi-thread
+        # por OpenMP, e paralelizar as folds por cima disso sobre-assina a
+        # maquina -- um worker morria e o score virava nan silenciosamente.
+        # error_score="raise" garante que uma falha estoure em vez de virar nan
+        # no csv de resultados.
         scores = cross_val_score(
             modelo,
             X_tr,
@@ -112,9 +118,12 @@ def executar() -> pd.DataFrame:
             groups=g_tr,
             cv=GroupKFold(n_splits=FOLDS),
             scoring="neg_mean_absolute_error",
-            n_jobs=-1,
+            error_score="raise",
         )
         mae_cv = -scores
+
+        if not np.isfinite(mae_cv).all():
+            raise RuntimeError(f"validacao cruzada de '{nome}' produziu score nao-finito")
 
         modelo.fit(X_tr, y_tr)
         metricas = metricas_em_reais(y_te.to_numpy(), modelo.predict(X_te))

@@ -60,6 +60,7 @@ efeito é imediato, sem reinstalar e sem gambiarra de `sys.path`.
 | Coletar em paralelo (3 workers) | `scripts\run_parallel.bat` |
 | Fundir as partes do paralelo | `-m imoveis_jp.scraping.chaves_na_mao.merge_parts` |
 | Normalizar para CSV | `-m imoveis_jp.processing.normalize_to_csv` |
+| Extrair campos da descrição (diagnóstico) | `-m imoveis_jp.processing.enrich_from_description` |
 | Consolidar one-hot e montar a matriz de features | `-m imoveis_jp.features.build_features` |
 | Matriz de correlação e seleção de atributos | `-m imoveis_jp.features.correlation` |
 | Treinar e avaliar os modelos | `-m imoveis_jp.models.train` |
@@ -84,6 +85,9 @@ e colinearidade embutida. `build_features` consolida tudo numa matriz só:
 
 - reconstrói do JSON bruto as células numéricas de `suites` e `banheiros` que a
   fusão HTML+LLM tinha sobrescrito com `True`/`False`;
+- preenche campos estruturados ausentes lendo a descrição (issue #3): `suites`
+  deixou de faltar em 54,3% da base e passou a faltar em 46,9%
+  ([docs/extracao_da_descricao.md](docs/extracao_da_descricao.md));
 - unifica as binárias equivalentes por OR, tratando `NaN` como ausência — na base
   deduplicada, `NaN` significava "o outro portal não usa esse termo";
 - descarta pseudo-atributos (`apartamento`, `lazer`, `conforto`…) e comodidades
@@ -110,9 +114,9 @@ atravessa a fronteira treino/validação. O teste é tocado uma única vez.
 
 | Modelo | CV MAE (log) | Teste MAE | Erro % mediano | R² (log) |
 |---|---|---|---|---|
-| Gradient Boosting | 0,2334 | R$ 179.489 | 17,6% | 0,871 |
-| Ridge | 0,3046 | R$ 255.779 | 23,6% | 0,769 |
-| Baseline (mediana) | 0,6493 | R$ 424.273 | 42,5% | −0,005 |
+| Gradient Boosting | 0,2306 | R$ 173.672 | 17,7% | 0,857 |
+| Ridge | 0,3037 | R$ 301.659 | 23,6% | 0,744 |
+| Baseline (mediana) | 0,6531 | R$ 417.354 | 42,5% | −0,001 |
 
 Metodologia, decisões e limitações: [docs/modelagem.md](docs/modelagem.md).
 
@@ -120,9 +124,6 @@ Metodologia, decisões e limitações: [docs/modelagem.md](docs/modelagem.md).
 
 ## Pendências conhecidas
 
-- O módulo `enrich_from_description.py` e seu teste **perderam o código-fonte** na
-  reorganização anterior; sobraram apenas os `.pyc`, preservados em `.recuperar/`
-  (fora do git). Dá para descompilar ou reescrever do zero.
 - `data/raw/imoveis_joao_pessoa.json` (~15 MiB) **é versionado**, para que a etapa de
   limpeza parta exatamente da mesma base. Evite recommitá-lo sem necessidade: cada
   nova versão do arquivo adiciona uma cópia inteira ao histórico do repositório.
