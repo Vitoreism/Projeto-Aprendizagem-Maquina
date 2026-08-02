@@ -5,11 +5,16 @@ consolida a base global deduplicada numa matriz de features pronta para modelage
 o one-hot das comodidades ja existia, mas gerado por tres caminhos independentes
 (llm sobre a descricao, html do chaves na mao e html do zap), o que deixou colunas
 duplicadas, colinearidade embutida e nan com significado de portal. este modulo
-resolve isso e aplica o one-hot que ainda faltava, nas categoricas nominais.
+resolve isso e entrega as categoricas nominais como texto normalizado.
 
 so entram aqui transformacoes deterministicas ou com constante fixa: nada que
 aprenda estatistica dos dados, porque isso teria que acontecer depois do split.
-duas features foram removidas por esse criterio:
+por esse criterio saiu tambem o one-hot das nominais, que era pd.get_dummies
+sobre a base inteira -- o conjunto de colunas era definido usando as linhas que
+virariam teste. ele vive agora no OneHotEncoder dentro do Pipeline de
+imoveis_jp.models.train, ajustado so no fold de treino.
+
+duas features foram removidas pelo mesmo criterio:
 
 - 'bairro_preco_m2_medio', que vinha de neighborhoods.csv. o arquivo parecia
   fonte externa, mas correlaciona 0,996 com a mediana de preco/m2 calculada
@@ -17,8 +22,9 @@ duas features foram removidas por esse criterio:
   alvo, ou seja, vazamento;
 - 'anunciante_qtd_anuncios', contagem calculada sobre a base inteira.
 
-o efeito de bairro continua coberto pelas dummies. para target encoding, ver
-imoveis_jp.models.dataset, onde da para ajustar so no treino.
+o efeito de bairro continua coberto pela coluna categorica 'bairro', codificada
+dentro do Pipeline. para target encoding, o lugar certo tambem e la, ajustado
+so no treino.
 """
 
 from __future__ import annotations
@@ -116,8 +122,9 @@ EXCECOES_SINONIMO = {"supermercado", "supermercados", "carpete"}
 CATEGORICAS = ["posicao_solar", "status_construcao", "tipo_unidade", "origem_anuncio"]
 
 FREQUENCIA_MINIMA = 0.01
-MINIMO_IMOVEIS_POR_BAIRRO = 30
 
+#: agrupamento de bairro raro e corte de dummies rara saem daqui: dependem de
+#: contagem sobre a base, entao vivem no OneHotEncoder dentro do Pipeline.
 #: toda binaria de comodidade sai prefixada, para nunca colidir com uma coluna
 #: numerica de mesmo nome -- foi assim que 'suites' e 'banheiros' se perderam.
 PREFIXO_COMODIDADE = "com_"
@@ -311,7 +318,14 @@ def filtrar_comodidades(df: pd.DataFrame, canonicas: List[str]) -> Tuple[pd.Data
 
 
 def normalizar_bairro(df: pd.DataFrame) -> pd.DataFrame:
-    """Preenche o bairro (42,6% nulo, so o zap traz) a partir do endereco."""
+    """Preenche o bairro (42,6% nulo, so o zap traz) a partir do endereco.
+
+    Extracao linha a linha, sem estatistica agregada: pode rodar antes do split.
+    O agrupamento das categorias raras NAO acontece aqui -- ele depende de
+    contar quantos imoveis cada bairro tem, e essa contagem sobre a base inteira
+    usaria as linhas de teste. Fica a cargo do OneHotEncoder(min_frequency=...)
+    dentro do Pipeline, que conta so no fold de treino.
+    """
     if "bairro" not in df.columns:
         df["bairro"] = None
 
@@ -324,56 +338,25 @@ def normalizar_bairro(df: pd.DataFrame) -> pd.DataFrame:
         for end, bai in zip(enderecos, df["bairro"])
     ]
 
-    contagem = df["bairro"].value_counts()
-    raros = contagem[contagem < MINIMO_IMOVEIS_POR_BAIRRO].index
-    df["bairro"] = df["bairro"].where(~df["bairro"].isin(raros), "outros")
-
-    print(
-        f"[Bairro] {df['bairro'].nunique()} categorias apos agrupar as com menos "
-        f"de {MINIMO_IMOVEIS_POR_BAIRRO} imoveis em 'outros'.",
-        flush=True,
-    )
+    print(f"[Bairro] {df['bairro'].nunique()} categorias distintas extraidas.", flush=True)
     return df
 
 
-def codificar_categoricas(df: pd.DataFrame) -> Tuple[pd.DataFrame, List[str]]:
-    """One-hot das nominais que ainda estavam como texto.
+def normalizar_categoricas(df: pd.DataFrame) -> pd.DataFrame:
+    """Padroniza o texto das nominais, sem codificar.
 
-    Aqui o vocabulario sai da base inteira, o que e aceitavel porque a matriz e
-    um artefato de EDA. Para treinar, o encoder tem que ser reajustado dentro do
-    split -- ver imoveis_jp.models.dataset.
+    O one-hot saiu daqui de proposito. Antes era pd.get_dummies sobre a base
+    inteira, o que definia o conjunto de colunas usando tambem as linhas que
+    virariam teste -- vazamento estrutural. Agora as categoricas chegam como
+    texto na matriz e o OneHotEncoder e ajustado dentro do Pipeline, com
+    handle_unknown para categoria que so aparece no teste.
     """
     alvos = [c for c in CATEGORICAS + ["bairro"] if c in df.columns]
     for col in alvos:
         df[col] = df[col].fillna("nao_informado").map(normalizar_texto)
 
-    dummies = pd.get_dummies(df[alvos], prefix=alvos, dtype="int8")
-    df = df.drop(columns=alvos)
-    df = pd.concat([df, dummies], axis=1)
-
-    print(f"[One-hot] {len(alvos)} categoricas -> {dummies.shape[1]} colunas binarias.", flush=True)
-    return df, list(dummies.columns)
-
-
-def filtrar_dummies_raras(df: pd.DataFrame, dummies: List[str]) -> Tuple[pd.DataFrame, List[str]]:
-    """Aplica o corte de frequencia tambem as dummies do one-hot.
-
-    O corte em filtrar_comodidades roda antes de codificar_categoricas, entao
-    nao alcancava as dummies: sobravam 30 colunas abaixo de 1%, entre elas
-    'tipo_unidade_duplex' com 0,01% (2 imoveis em 16 mil).
-    """
-    presentes = [c for c in dummies if c in df.columns]
-    frequencia = df[presentes].mean()
-    raras = sorted(frequencia[frequencia < FREQUENCIA_MINIMA].index.tolist())
-
-    df = df.drop(columns=raras)
-    if raras:
-        print(
-            f"[Filtro] {len(raras)} dummies com frequencia < {FREQUENCIA_MINIMA:.0%} "
-            f"removidas. Restam {len(presentes) - len(raras)}.",
-            flush=True,
-        )
-    return df, raras
+    print(f"[Categoricas] {len(alvos)} colunas normalizadas como texto: {', '.join(alvos)}.", flush=True)
+    return df
 
 
 def construir_matriz() -> pd.DataFrame:
@@ -396,8 +379,7 @@ def construir_matriz() -> pd.DataFrame:
     df, preenchidos_do_texto = enriquecer(df)
     df, info_filtro = filtrar_comodidades(df, info_binarias["canonicas"])
     df = normalizar_bairro(df)
-    df, dummies = codificar_categoricas(df)
-    df, dummies_raras = filtrar_dummies_raras(df, dummies)
+    df = normalizar_categoricas(df)
 
     df = df.drop(columns=[c for c in COLUNAS_DESCARTADAS if c in df.columns])
 
@@ -413,7 +395,6 @@ def construir_matriz() -> pd.DataFrame:
         "reparos_numericos": reparos,
         "valores_implausiveis_anulados": fora_da_faixa,
         "preenchidos_da_descricao": preenchidos_do_texto,
-        "dummies_raras_removidas": dummies_raras,
         "binarias": info_binarias,
         "filtro": info_filtro,
     }
