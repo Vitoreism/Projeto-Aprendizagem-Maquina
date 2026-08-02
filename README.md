@@ -122,6 +122,10 @@ atravessa a fronteira treino/validação. O teste é tocado uma única vez.
 
 Metodologia, decisões e limitações: [docs/modelagem.md](docs/modelagem.md).
 
+Por que a extração via LLM do zap continua pendente — e por que completá-la
+provavelmente não vale a pena:
+[docs/extracao_zap_diagnostico.md](docs/extracao_zap_diagnostico.md).
+
 ---
 
 ## Pendências conhecidas
