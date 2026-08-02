@@ -61,9 +61,25 @@ def montar_modelos(numericas: List[str], binarias: List[str]) -> Dict[str, Pipel
     return {
         # piso absoluto: prever sempre a mediana. qualquer modelo tem que ganhar disto.
         "baseline_mediana": com_preparo(DummyRegressor(strategy="median")),
+        # alpha=1,0 nao e escolha preguicosa: a busca varreu de 0,1 a 1.000 e
+        # devolveu exatamente o default. o gargalo do linear aqui nao e
+        # regularizacao, e forma funcional.
         "ridge": com_preparo(Ridge(alpha=1.0, random_state=dataset.SEMENTE)),
+        # configuracao padrao, mantida como referencia do ganho do ajuste.
         "gradient_boosting": com_preparo(
             HistGradientBoostingRegressor(random_state=dataset.SEMENTE)
+        ),
+        # vencedora do GridSearchCV de imoveis_jp.models.tune, fixada aqui para
+        # o treino ser reproduzivel sem depender de rodar a busca antes.
+        "gradient_boosting_ajustado": com_preparo(
+            HistGradientBoostingRegressor(
+                learning_rate=0.05,
+                max_iter=500,
+                max_leaf_nodes=127,
+                min_samples_leaf=20,
+                l2_regularization=0.0,
+                random_state=dataset.SEMENTE,
+            )
         ),
     }
 
