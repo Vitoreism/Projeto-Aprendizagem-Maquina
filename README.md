@@ -11,7 +11,9 @@ de anúncios coletados do chavesnamao.com.br.
 Projeto-Aprendizagem-Maquina/
 ├── data/
 │   ├── raw/          snapshots brutos do scrape        (versionado)
-│   ├── interim/      resultados intermediários         (fora do git)
+│   ├── interim/      resultados intermediários         (fora do git, exceto
+│   │                 os checkpoints de extração via LLM: representam cota
+│   │                 de API já consumida e não são regeneráveis de graça)
 │   └── processed/    datasets finais em CSV            (versionado)
 ├── docs/             notas e decisões (docs/scraping.md)
 ├── notebooks/        exploração e EDA
