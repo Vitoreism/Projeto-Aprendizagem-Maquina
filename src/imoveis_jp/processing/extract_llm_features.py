@@ -263,7 +263,9 @@ def obter_caminhos_dataset(dataset_name: str = "zap") -> tuple[Path, Path, Path,
     if dataset_name.lower() in ("zap", "zapimoveis"):
         input_file = config.RAW / "imoveis_joao_pessoa_zap.json"
         if not input_file.exists():
-            src_zap = Path("src/scrapping/zap_imoveis/imoveis_joao_pessoa_zap.json")
+            # fallback para onde o scrape do zap deixa o arquivo dentro do pacote.
+            # via config.ROOT porque o comando precisa funcionar de qualquer pasta.
+            src_zap = config.ROOT / "src" / "imoveis_jp" / "scraping" / "zap_imoveis" / "imoveis_joao_pessoa_zap.json"
             if src_zap.exists():
                 input_file = src_zap
         checkpoint_file = config.INTERIM / "extractions_llm_zap.json"
@@ -474,6 +476,10 @@ def fundir_json_enriquecido_v2(dataset_name: str = "zap", atributos_dinamicos: O
             except Exception:
                 pass
 
+    # nomes dos atributos booleanos vindos da llm: so eles podem ser fundidos
+    # com as colunas de comodidade do html (ver comentario mais abaixo).
+    chaves_llm = {at.replace(" ", "_") for at in atributos_dinamicos}
+
     imoveis_v2 = []
     for item in imoveis_originais:
         url = item.get("url_anuncio")
@@ -490,8 +496,12 @@ def fundir_json_enriquecido_v2(dataset_name: str = "zap", atributos_dinamicos: O
                 val_bool = bool(dict_html.get(col_h, False))
                 copia_item[col_h] = val_bool
 
+                # so funde com o atributo do llm quando ele existe de fato como
+                # atributo booleano. sem esse filtro, 'comodidade_suites' e
+                # 'comodidade_banheiros' sobrescreviam as colunas numericas
+                # 'suites' e 'banheiros' do scrap com True/False.
                 nome_limpo = col_h.replace("comodidade_", "")
-                if nome_limpo in copia_item:
+                if nome_limpo in chaves_llm and nome_limpo in copia_item:
                     val_llm = bool(copia_item[nome_limpo])
                     copia_item[nome_limpo] = val_bool or val_llm
         else:

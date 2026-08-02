@@ -60,6 +60,9 @@ efeito é imediato, sem reinstalar e sem gambiarra de `sys.path`.
 | Coletar em paralelo (3 workers) | `scripts\run_parallel.bat` |
 | Fundir as partes do paralelo | `-m imoveis_jp.scraping.chaves_na_mao.merge_parts` |
 | Normalizar para CSV | `-m imoveis_jp.processing.normalize_to_csv` |
+| Consolidar one-hot e montar a matriz de features | `-m imoveis_jp.features.build_features` |
+| Matriz de correlação e seleção de atributos | `-m imoveis_jp.features.correlation` |
+| Treinar e avaliar os modelos | `-m imoveis_jp.models.train` |
 | Rodar os testes | `-m pytest` |
 
 Detalhes do scrape (retomada, sharding, flags, ética/robots.txt): [docs/scraping.md](docs/scraping.md).
@@ -68,10 +71,50 @@ Detalhes do scrape (retomada, sharding, flags, ética/robots.txt): [docs/scrapin
 
 ## Próximas etapas
 
-1. Limpeza e tratamento da base → `src/imoveis_jp/processing/`
-2. Extração via LLM das características que só existem na descrição
-3. One-hot + matriz de correlação para enxugar atributos → `src/imoveis_jp/features/`
-4. Treino e avaliação dos modelos → `src/imoveis_jp/models/`
+1. ~~Limpeza e tratamento da base~~ → `src/imoveis_jp/processing/`
+2. ~~Extração via LLM das características que só existem na descrição~~
+3. ~~One-hot + matriz de correlação para enxugar atributos~~ → `src/imoveis_jp/features/`
+4. ~~Treino e avaliação dos modelos~~ → `src/imoveis_jp/models/`
+
+### Etapa 3 — como funciona
+
+O one-hot das comodidades vinha de três geradores independentes (LLM sobre a
+descrição, HTML do chaves na mão, HTML do zap), o que produzia colunas duplicadas
+e colinearidade embutida. `build_features` consolida tudo numa matriz só:
+
+- reconstrói do JSON bruto as células numéricas de `suites` e `banheiros` que a
+  fusão HTML+LLM tinha sobrescrito com `True`/`False`;
+- unifica as binárias equivalentes por OR, tratando `NaN` como ausência — na base
+  deduplicada, `NaN` significava "o outro portal não usa esse termo";
+- descarta pseudo-atributos (`apartamento`, `lazer`, `conforto`…) e comodidades
+  presentes em menos de 1% dos imóveis;
+- anula valores fora da faixa plausível (havia preço de R$ 470 milhões);
+- aplica one-hot em `posicao_solar`, `status_construcao`, `tipo_unidade`,
+  `origem_anuncio` e `bairro`.
+
+`correlation` roda em cima da matriz e gera, em `data/processed/`, o ranking de
+cada atributo contra o preço (`correlacao_alvo.csv`), a poda dos redundantes
+(`pares_redundantes.csv`), a lista final (`features_selecionadas.csv`) e os
+heatmaps em `docs/figuras/`.
+
+Números, decisões e a pendência da extração via LLM no zap:
+[docs/features_one_hot_correlacao.md](docs/features_one_hot_correlacao.md).
+
+### Etapa 4 — como funciona
+
+Split 80/20 **agrupado por imóvel físico** (o mesmo apartamento aparece em até 7
+anúncios; com split aleatório ele cairia no treino e no teste), semente `42`,
+alvo em `log(preco_venda)`. Imputação e padronização ficam dentro de um `Pipeline`
+do sklearn, reajustado em cada fold do `GroupKFold(5)` — nenhuma estatística
+atravessa a fronteira treino/validação. O teste é tocado uma única vez.
+
+| Modelo | CV MAE (log) | Teste MAE | Erro % mediano | R² (log) |
+|---|---|---|---|---|
+| Gradient Boosting | 0,2334 | R$ 179.489 | 17,6% | 0,871 |
+| Ridge | 0,3046 | R$ 255.779 | 23,6% | 0,769 |
+| Baseline (mediana) | 0,6493 | R$ 424.273 | 42,5% | −0,005 |
+
+Metodologia, decisões e limitações: [docs/modelagem.md](docs/modelagem.md).
 
 ---
 
