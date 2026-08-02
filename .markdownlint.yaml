@@ -1,0 +1,23 @@
+# Configuração do markdownlint.
+#
+# As regras desativadas aqui são de formatação, não de correção: nenhuma delas
+# muda como o Markdown é renderizado. Estavam gerando algumas centenas de avisos
+# no painel de problemas — o suficiente para esconder erro de verdade no meio.
+#
+# Preferimos silenciar a regra a reformatar a documentação inteira para
+# satisfazer um estilo que o projeto nunca adotou.
+
+# MD060 exige "| --- | --- |" no lugar de "|---|---|".
+# São ~135 linhas de tabela em 7 arquivos, todas no estilo compacto desde o
+# primeiro commit do README.
+table-column-style: false
+
+# MD040 exige linguagem em toda cerca de código. Os blocos sem linguagem aqui
+# são diagramas de estrutura de pastas e saídas de terminal, que não têm
+# linguagem aplicável e não ganham nada com realce de sintaxe.
+fenced-code-language: false
+
+# MD013 limita o comprimento da linha. A documentação já é quebrada em ~80
+# colunas por convenção, mas tabelas e URLs estouram por natureza e não há
+# como quebrá-las sem piorar a leitura.
+line-length: false

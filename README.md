@@ -11,7 +11,9 @@ de anúncios coletados do chavesnamao.com.br.
 Projeto-Aprendizagem-Maquina/
 ├── data/
 │   ├── raw/          snapshots brutos do scrape        (versionado)
-│   ├── interim/      resultados intermediários         (fora do git)
+│   ├── interim/      resultados intermediários         (fora do git, exceto
+│   │                 os checkpoints de extração via LLM: representam cota
+│   │                 de API já consumida e não são regeneráveis de graça)
 │   └── processed/    datasets finais em CSV            (versionado)
 ├── docs/             notas e decisões (docs/scraping.md)
 ├── notebooks/        exploração e EDA
@@ -121,6 +123,10 @@ atravessa a fronteira treino/validação. O teste é tocado uma única vez.
 | Baseline (mediana) | 0,6531 | R$ 417.354 | 42,5% | −0,001 |
 
 Metodologia, decisões e limitações: [docs/modelagem.md](docs/modelagem.md).
+
+Por que a extração via LLM do zap continua pendente — e por que completá-la
+provavelmente não vale a pena:
+[docs/extracao_zap_diagnostico.md](docs/extracao_zap_diagnostico.md).
 
 ---
 

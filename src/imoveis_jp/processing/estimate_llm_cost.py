@@ -2,8 +2,6 @@
 Script para estimativa de tokens e custos para a Issue #9 (Extração via LLM).
 """
 import json
-import sys
-from pathlib import Path
 from imoveis_jp import config
 
 def estimar_tokens_e_custo():
