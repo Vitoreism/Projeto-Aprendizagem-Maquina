@@ -109,6 +109,7 @@ def construir_prompt_dinamico_batch(atributos_dinamicos: List[str]) -> str:
     prompt = f"""Voce e um especialista em analise de dados imobiliarios em Joao Pessoa (PB).
 Sua tarefa e analisar o texto de descricoes de imoveis e extrair os atributos validados empiricamente:
 
+- "id_lote": copie EXATAMENTE o id_lote do imovel correspondente na entrada
 - "posicao_solar": "Nascente" | "Poente" | "Sul" | "Norte" | "Nao informado"
 - "distancia_praia_m": numero inteiro estimado de metros ate a praia ou null se nao informado
 - "status_construcao": "Na planta" | "Em construcao" | "Pronto para morar" | "Usado" | "Nao informado"
@@ -162,16 +163,32 @@ def extrair_lote_atributos_llm(
             lista_resultados = dados_json.get("resultados", [])
 
             mapeamento_final = {}
-            for item_res in lista_resultados:
+            for posicao, item_res in enumerate(lista_resultados):
+                # o modelo devolve os resultados na ordem da entrada, mas nem
+                # sempre repete o id_lote. exigir o campo fazia TODO resultado
+                # cair no default silenciosamente -- foi o que zerou a extracao
+                # inteira do zap. a posicao na lista e o fallback natural.
                 id_lote = item_res.get("id_lote")
-                if id_lote is not None and 0 <= id_lote < len(lote_imoveis):
-                    url_imovel = lote_imoveis[id_lote]["url_anuncio"]
-                    mapeamento_final[url_imovel] = _sanitizar_resposta_dinamica(item_res, atributos_dinamicos)
+                if not isinstance(id_lote, int) or not (0 <= id_lote < len(lote_imoveis)):
+                    id_lote = posicao
+                if id_lote >= len(lote_imoveis):
+                    continue
 
-            for idx, item in enumerate(lote_imoveis):
-                url = item["url_anuncio"]
-                if url not in mapeamento_final:
-                    mapeamento_final[url] = _retornar_atributos_padrao_dinamicos(atributos_dinamicos)
+                url_imovel = lote_imoveis[id_lote]["url_anuncio"]
+                mapeamento_final[url_imovel] = _sanitizar_resposta_dinamica(item_res, atributos_dinamicos)
+
+            faltantes = [i["url_anuncio"] for i in lote_imoveis if i["url_anuncio"] not in mapeamento_final]
+            for url in faltantes:
+                mapeamento_final[url] = _retornar_atributos_padrao_dinamicos(atributos_dinamicos)
+
+            if len(faltantes) == len(lote_imoveis):
+                # lote inteiro no default e sinal de resposta fora do formato,
+                # nao de imoveis sem atributo. antes isso passava calado.
+                print(
+                    f"[Aviso] Lote de {len(lote_imoveis)} imoveis voltou sem nenhum "
+                    f"resultado aproveitavel (chaves: {list(dados_json)[:3]}).",
+                    flush=True,
+                )
 
             return mapeamento_final
 
@@ -218,6 +235,13 @@ def _sanitizar_resposta_dinamica(dados: Dict[str, Any], atributos_dinamicos: Lis
             res[chave] = v.lower() in ("true", "sim", "yes", "1")
 
     return res
+
+
+#: mesmo criterio que extrair_lote_atributos_llm ja usava para trocar o texto
+#: por "sem descricao disponivel"; aqui ele serve para nem chamar a API.
+def _tem_descricao_util(item: Dict[str, Any]) -> bool:
+    desc = str(item.get("descricao_completa", "") or "").strip()
+    return len(desc) >= 10 and desc != "Descrição não encontrada."
 
 
 def _retornar_atributos_padrao_dinamicos(atributos_dinamicos: List[str]) -> Dict[str, Any]:
@@ -375,6 +399,23 @@ def executar_pipeline_extracao_llm(
 
     pendentes = [item for item in imoveis if item.get("url_anuncio") and item.get("url_anuncio") not in extracoes]
     print(f"[Pendentes] Imoveis restantes a processar: {len(pendentes)}", flush=True)
+
+    # anuncio sem descricao nao tem o que extrair. antes ele ia para a API com o
+    # texto trocado por "sem descricao disponivel" e voltava com tudo False --
+    # o mesmo resultado do default, ao custo de uma chamada. no zap isso e 78%
+    # da base: 1.974 chamadas em vez de 434. resolvido localmente.
+    sem_texto = [item for item in pendentes if not _tem_descricao_util(item)]
+    if sem_texto:
+        padrao = _retornar_atributos_padrao_dinamicos(atributos_dinamicos)
+        for item in sem_texto:
+            extracoes[item["url_anuncio"]] = dict(padrao)
+        salvar_extracoes_checkpoint(checkpoint_file, extracoes)
+        pendentes = [item for item in pendentes if _tem_descricao_util(item)]
+        print(
+            f"[Pendentes] {len(sem_texto)} sem descricao resolvidos localmente; "
+            f"{len(pendentes)} vao para a API.",
+            flush=True,
+        )
 
     if not pendentes:
         print(f"[Concluido] Todos os imoveis do dataset '{dataset_name}' ja foram extraidos!", flush=True)
