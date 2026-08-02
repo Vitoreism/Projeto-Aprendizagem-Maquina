@@ -34,6 +34,7 @@ from imoveis_jp.processing.deduplicate_dataset import (
     converter_preco,
     extrair_bairro,
 )
+from imoveis_jp.processing.enrich_from_description import enriquecer
 from imoveis_jp.processing.extract_amenities_from_scrap import (
     mapear_sinonimos,
     normalizar_texto,
@@ -390,6 +391,9 @@ def construir_matriz() -> pd.DataFrame:
     df, info_binarias = consolidar_binarias(df)
     df = converter_colunas_numericas(df)
     df, fora_da_faixa = aplicar_limites(df)
+    # depois dos limites de proposito: celula anulada por implausibilidade tambem
+    # pode ser recuperada da descricao.
+    df, preenchidos_do_texto = enriquecer(df)
     df, info_filtro = filtrar_comodidades(df, info_binarias["canonicas"])
     df = normalizar_bairro(df)
     df, dummies = codificar_categoricas(df)
@@ -408,6 +412,7 @@ def construir_matriz() -> pd.DataFrame:
         "saida": {"linhas": int(df.shape[0]), "colunas": int(df.shape[1])},
         "reparos_numericos": reparos,
         "valores_implausiveis_anulados": fora_da_faixa,
+        "preenchidos_da_descricao": preenchidos_do_texto,
         "dummies_raras_removidas": dummies_raras,
         "binarias": info_binarias,
         "filtro": info_filtro,

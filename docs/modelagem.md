@@ -14,7 +14,7 @@
 | Tipo | Regressão |
 | Alvo | `log(preco_venda)` |
 | Observações | 15.987 anúncios com preço |
-| Imóveis físicos distintos | 14.232 |
+| Imóveis físicos distintos | 14.224 |
 | Features | 99 |
 | Semente | `42`, em `dataset.SEMENTE` |
 
@@ -40,7 +40,7 @@ A assinatura do imóvel é `(preço arredondado ao milhar, área, quartos, banhe
 garagens)`. Anúncio sem preço ou sem área não tem assinatura utilizável e vira
 grupo próprio, em vez de se juntar a um grupo gigante de nulos.
 
-Resultado: **12.777 no treino, 3.210 no teste, 0 grupos dos dois lados.** O
+Resultado: **12.820 no treino, 3.167 no teste, 0 grupos dos dois lados.** O
 `train.py` verifica isso a cada execução e aborta se não for zero.
 
 ---
@@ -60,7 +60,7 @@ estatística do fold de validação entra no de treino.
 Duas decisões que valem justificativa:
 
 - **`add_indicator=True`.** Com `iptu` ausente em 80% dos anúncios, `area_total`
-  em 61% e `suites`/`condominio` em 54%, o próprio silêncio do anunciante é
+  em 61% e `suites`/`condominio` perto de 47% e 54%, o próprio silêncio do anunciante é
   informação. A indicadora preserva isso; imputar sem ela apagaria o sinal.
 - **Mediana, não média.** Pelo mesmo motivo do log: as caudas são pesadas.
 
@@ -84,12 +84,12 @@ de modelo.
 
 | Modelo | CV MAE (log) | Teste MAE | Erro % mediano | R² (log) |
 |---|---|---|---|---|
-| **Gradient Boosting** | **0,2334 ± 0,0039** | **R$ 179.489** | **17,6%** | **0,871** |
-| Ridge | 0,3046 ± 0,0051 | R$ 255.779 | 23,6% | 0,769 |
-| Baseline (mediana) | 0,6493 ± 0,0043 | R$ 424.273 | 42,5% | −0,005 |
+| **Gradient Boosting** | **0,2306 ± 0,0034** | **R$ 173.672** | **17,7%** | **0,857** |
+| Ridge | 0,3037 ± 0,0050 | R$ 301.659 | 23,6% | 0,744 |
+| Baseline (mediana) | 0,6531 ± 0,0047 | R$ 417.354 | 42,5% | −0,001 |
 
 O baseline existe como piso de sanidade: prever sempre a mediana. Seu R² de
-−0,005 confirma que a montagem está correta — um baseline honesto tem que ficar
+−0,001 confirma que a montagem está correta — um baseline honesto tem que ficar
 em torno de zero.
 
 O gradient boosting erra **17,6% na mediana**. Para um imóvel de R$ 575 mil, isso
@@ -115,6 +115,10 @@ relevantes — provavelmente entre área, bairro e padrão de acabamento.
   função do preço. Está disponível no anúncio, então não é vazamento temporal,
   mas infla a performance de um jeito que não se sustenta para imóvel novo sem
   IPTU lançado. Presente em apenas 20% da base.
+- **Folds em série, não em paralelo.** O `HistGradientBoosting` já é multi-thread
+  por OpenMP; paralelizar as folds por cima sobrecarregava a máquina e um worker
+  morria, devolvendo `nan` silenciosamente como score. O `train.py` agora usa
+  `error_score="raise"` e aborta se algum score não for finito.
 - **Sem tuning de hiperparâmetros.** Os resultados são de configuração padrão. Um
   `GridSearchCV` dentro do `GroupKFold` deve melhorar o boosting.
 
