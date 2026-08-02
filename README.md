@@ -64,6 +64,7 @@ efeito é imediato, sem reinstalar e sem gambiarra de `sys.path`.
 | Consolidar one-hot e montar a matriz de features | `-m imoveis_jp.features.build_features` |
 | Matriz de correlação e seleção de atributos | `-m imoveis_jp.features.correlation` |
 | Treinar e avaliar os modelos | `-m imoveis_jp.models.train` |
+| Buscar hiperparâmetros | `-m imoveis_jp.models.tune` |
 | Rodar os testes | `-m pytest` |
 
 Detalhes do scrape (retomada, sharding, flags, ética/robots.txt): [docs/scraping.md](docs/scraping.md).
@@ -114,7 +115,8 @@ atravessa a fronteira treino/validação. O teste é tocado uma única vez.
 
 | Modelo | CV MAE (log) | Teste MAE | Erro % mediano | R² (log) |
 |---|---|---|---|---|
-| Gradient Boosting | 0,2306 | R$ 173.672 | 17,7% | 0,857 |
+| Gradient Boosting ajustado | 0,2232 | R$ 166.660 | 16,4% | 0,863 |
+| Gradient Boosting (padrão) | 0,2306 | R$ 173.672 | 17,7% | 0,857 |
 | Ridge | 0,3037 | R$ 301.659 | 23,6% | 0,744 |
 | Baseline (mediana) | 0,6531 | R$ 417.354 | 42,5% | −0,001 |
 
