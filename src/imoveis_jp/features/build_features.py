@@ -106,6 +106,9 @@ NAO_COMODIDADES = {
     "lazer",
     "praticidade",
     "localizacao_privilegiada",
+    # so aparece explicita no texto em 8,4% dos imoveis, contra 92,2% com
+    # 'garagens' (numerica) > 0 -- mede mencao no anuncio, nao vaga real.
+    "vaga_garagem",
 }
 
 #: falsos positivos do casamento por substring de mapear_sinonimos:
@@ -116,6 +119,11 @@ EXCECOES_SINONIMO = {"supermercado", "supermercados", "carpete"}
 CATEGORICAS = ["posicao_solar", "status_construcao", "tipo_unidade", "origem_anuncio"]
 
 FREQUENCIA_MINIMA = 0.01
+#: espelho do corte acima -- dummy presente em quase todo mundo carrega tao
+#: pouca informacao quanto uma rara (ex.: 'tipo_unidade_apartamento_tipo' em
+#: 99,6% dos imoveis). so vale para as categoricas: nas comodidades uma
+#: frequencia alta e sinal real, nao um artefato de vocabulario do portal.
+FREQUENCIA_MAXIMA_DUMMY = 0.99
 MINIMO_IMOVEIS_POR_BAIRRO = 30
 
 #: toda binaria de comodidade sai prefixada, para nunca colidir com uma coluna
@@ -356,24 +364,38 @@ def codificar_categoricas(df: pd.DataFrame) -> Tuple[pd.DataFrame, List[str]]:
 
 
 def filtrar_dummies_raras(df: pd.DataFrame, dummies: List[str]) -> Tuple[pd.DataFrame, List[str]]:
-    """Aplica o corte de frequencia tambem as dummies do one-hot.
+    """Aplica o corte de frequencia tambem as dummies do one-hot, nos dois sentidos.
 
     O corte em filtrar_comodidades roda antes de codificar_categoricas, entao
     nao alcancava as dummies: sobravam 30 colunas abaixo de 1%, entre elas
     'tipo_unidade_duplex' com 0,01% (2 imoveis em 16 mil).
+
+    O espelho tambem se aplica: 'tipo_unidade_apartamento_tipo' (99,6%),
+    'posicao_solar_nao_informado' (97,3%) e 'status_construcao_nao_informado'
+    (95,5%) sao praticamente constantes -- sao, nao por acaso, 3 das 6
+    features mais fracas do ranking de correlacao.
     """
     presentes = [c for c in dummies if c in df.columns]
     frequencia = df[presentes].mean()
     raras = sorted(frequencia[frequencia < FREQUENCIA_MINIMA].index.tolist())
+    quase_constantes = sorted(frequencia[frequencia > FREQUENCIA_MAXIMA_DUMMY].index.tolist())
+    descartadas = raras + quase_constantes
 
-    df = df.drop(columns=raras)
+    df = df.drop(columns=descartadas)
     if raras:
         print(
             f"[Filtro] {len(raras)} dummies com frequencia < {FREQUENCIA_MINIMA:.0%} "
-            f"removidas. Restam {len(presentes) - len(raras)}.",
+            f"removidas.",
             flush=True,
         )
-    return df, raras
+    if quase_constantes:
+        print(
+            f"[Filtro] {len(quase_constantes)} dummies com frequencia > "
+            f"{FREQUENCIA_MAXIMA_DUMMY:.0%} removidas: {', '.join(quase_constantes)}.",
+            flush=True,
+        )
+    print(f"[Filtro] Restam {len(presentes) - len(descartadas)} dummies.", flush=True)
+    return df, descartadas
 
 
 def construir_matriz() -> pd.DataFrame:
@@ -397,7 +419,7 @@ def construir_matriz() -> pd.DataFrame:
     df, info_filtro = filtrar_comodidades(df, info_binarias["canonicas"])
     df = normalizar_bairro(df)
     df, dummies = codificar_categoricas(df)
-    df, dummies_raras = filtrar_dummies_raras(df, dummies)
+    df, dummies_descartadas = filtrar_dummies_raras(df, dummies)
 
     df = df.drop(columns=[c for c in COLUNAS_DESCARTADAS if c in df.columns])
 
@@ -413,7 +435,7 @@ def construir_matriz() -> pd.DataFrame:
         "reparos_numericos": reparos,
         "valores_implausiveis_anulados": fora_da_faixa,
         "preenchidos_da_descricao": preenchidos_do_texto,
-        "dummies_raras_removidas": dummies_raras,
+        "dummies_descartadas": dummies_descartadas,
         "binarias": info_binarias,
         "filtro": info_filtro,
     }
