@@ -84,7 +84,7 @@ custo em acurácia. Aconteceu o contrário:
 
 | Modelo | CV antes | CV depois |
 |---|---|---|
-| Gradient Boosting ajustado | 0,2232 | **0,2183** |
+| Gradient Boosting ajustado | 0,2232 | **0,2155** |
 | Gradient Boosting (padrão) | 0,2306 | **0,2238** |
 | Ridge | 0,3037 | **0,2906** |
 
@@ -115,7 +115,7 @@ de modelo.
 
 | Modelo | CV MAE (log) | Teste MAE | Erro % mediano | R² (log) |
 |---|---|---|---|---|
-| **Gradient Boosting ajustado** | **0,2183 ± 0,0041** | **R$ 165.112** | **16,0%** | **0,868** |
+| **Gradient Boosting ajustado** | **0,2155 ± 0,0042** | **R$ 167.866** | **16,2%** | **0,868** |
 | Gradient Boosting (padrão) | 0,2238 ± 0,0032 | R$ 171.392 | 17,0% | 0,861 |
 | Ridge | 0,2906 ± 0,0045 | R$ 290.742 | 22,3% | 0,766 |
 | Baseline (mediana) | 0,6531 ± 0,0047 | R$ 417.354 | 42,5% | −0,001 |
@@ -124,7 +124,7 @@ O baseline existe como piso de sanidade: prever sempre a mediana. Seu R² de
 −0,001 confirma que a montagem está correta — um baseline honesto tem que ficar
 em torno de zero.
 
-O gradient boosting ajustado erra **16,0% na mediana**. Para um imóvel de R$ 575 mil, isso
+O gradient boosting ajustado erra **16,2% na mediana**. Para um imóvel de R$ 575 mil, isso
 é uma faixa de cerca de R$ 100 mil — aceitável para triagem, insuficiente para
 avaliação individual. O desvio da CV é pequeno (±0,004) frente à diferença entre
 os modelos (0,07), então a vantagem sobre o Ridge é real, não ruído de partição.
@@ -214,25 +214,80 @@ ficaram a **0,00002** uma da outra, porque o early stopping automático (§6) pa
 o modelo antes do teto. Virou valor fixo, documentado como limite superior — sem
 isso, quem revisitasse a grade perderia tempo mexendo nele.
 
-### 8.3 Resultado
+### 8.3 A segunda grade também estava mal-posta, no outro eixo
+
+Depois que o one-hot mudou de lugar (§3.1), a busca foi refeita. Ela devolveu
+`l2_regularization=1.0` e `min_samples_leaf=20` — e os dois mereciam desconfiança.
+
+**`l2_regularization` é eixo morto.** A média entre configurações deu 0,2234 com
+`l2=0` e 0,2235 com `l2=1`. A "vitória" do 1,0 aparecia só na melhor configuração
+(0,2178 contra 0,2183): **0,0005**, contra um desvio entre folds de 0,0039. É
+0,12 desvio — ruído de partição com cara de resultado. Fixado no default, o que
+liberou metade das configurações da grade.
+
+**`min_samples_leaf` estava na borda** — o mesmo defeito da §8.2, em outro eixo, e
+que a primeira versão desta grade não pegou. Médias: 20 → 0,2204 contra
+50 → 0,2265, melhorando monotonicamente até o limite inferior. Sondando abaixo:
+
+```
+2 → 0,2163    5 → 0,2154    10 → 0,2155    20 → 0,2183    50 → 0,2263
+```
+
+O mínimo real é interior, em 5–10. O comentário no código dizia que folha grande
+protege contra decorar imóvel de alto padrão — verdade, mas 20 já era grande
+demais e custava 0,003.
+
+### 8.4 Resultado, e um empate resolvido fora da CV
 
 | Modelo | CV padrão | CV ajustado | Ganho |
 |---|---|---|---|
-| Gradient Boosting | 0,2279 | **0,2232** | +2,1% |
-| Ridge | 0,3037 | 0,3037 | 0,0% |
+| Gradient Boosting | 0,2222 | **0,2154** | +3,1% |
+| Ridge | 0,2906 | 0,2906 | 0,0% |
 
-Configuração vencedora: `learning_rate=0.05`, `max_iter=500`,
-`max_leaf_nodes=127`, `min_samples_leaf=20`, `l2_regularization=0.0`. Está fixada
-em `train.py` para o treino ser reproduzível sem depender de rodar a busca antes.
+Com a grade corrigida, `max_leaf_nodes` ficou com ótimo interior em 127
+(255 → 0,2210) e a busca está bem-posta.
 
-**Dimensione o ganho antes de comemorar:** a diferença de CV é 0,0047 e o desvio
-entre folds da melhor configuração é 0,0031 — cerca de 1,5 desvio. É real, mas
-modesto, e bem menor que o salto de Ridge para boosting (0,08).
+A vencedora formal foi `min_samples_leaf=5` (0,2154) contra `10` (0,2155):
+**0,0001 de diferença**, contra desvio de 0,0037. Pelo critério de decisão do
+projeto — vantagem só é declarada acima de 0,005 — isso é **empate técnico**, e
+nenhum dos critérios de desempate (explicabilidade, custo, número de
+hiperparâmetros) separa os dois. O desempate foi o argumento de domínio já
+documentado: cauda longa, folha maior dificulta isolar um único anúncio caro.
+Ficou `min_samples_leaf=10`, e o `train.py` registra que a escolha **não** veio da
+CV.
+
+### 8.5 O ganho da busca não transferiu para o teste
+
+Este é o resultado mais instrutivo da etapa. Comparando a configuração anterior
+(`leaf=20`) com a nova (`leaf=10`), na **mesma métrica**:
+
+| | leaf = 20 | leaf = 10 | Δ |
+|---|---|---|---|
+| CV MAE (log) | 0,2183 | 0,2155 | **−0,0028** |
+| **Teste MAE (log)** | 0,2146 | 0,2145 | **−0,0001** |
+| Teste R² (log) | 0,8680 | 0,8680 | 0,0000 |
+| Teste MAE (R$) | 165.112 | 167.866 | +2.754 |
+| Teste erro mediano | 16,0% | 16,2% | +0,11 p.p. |
+
+**Apenas 4% do ganho medido na CV apareceu no teste.** A §8.1 afirmava isso em
+teoria — que o score da busca é otimista porque parte da vantagem da vencedora é
+sorte de partição. Aqui está a medição.
+
+O MAE em reais até piorou. Não é contradição: em log as duas configurações são
+indistinguíveis (0,2146 contra 0,2145), e a diferença em reais nasce inteira do
+`exp()`, que amplifica erro na cauda cara. A árvore com folhas menores ajusta a
+cauda de forma mais agressiva e generaliza um pouco pior lá.
+
+**Por que a configuração nova ficou mesmo assim.** O protocolo é que a CV escolhe
+e o teste relata. Voltar para `leaf=20` depois de ver o teste seria usar o teste
+para selecionar — exatamente o que ele não pode fazer, sob pena de deixar de ser
+uma estimativa honesta de generalização. O número relatado é o da configuração
+escolhida antes de olhar.
 
 **O Ridge não melhorou nada.** A busca varreu `alpha` de 0,1 a 1.000 e devolveu
 exatamente o default 1,0. Isso é informação, não fracasso: o gargalo do modelo
 linear não é regularização, é forma funcional — ele não representa as interações
-que o boosting captura.
+que o boosting captura. A §9.4 mostra qual interação é essa.
 
 ---
 
@@ -250,22 +305,22 @@ atributo**. É leitura, não decisão.
 ### 9.1 Os resíduos estão centrados
 
 ```
-média = +0,0022   mediana = +0,0001   desvio = 0,2988   assimetria = +0,33
+média = +0,0024   mediana = +0,0013   desvio = 0,2988   assimetria = +0,42
 ```
 
 Em log, a mediana do resíduo é praticamente zero: o modelo não tem viés global.
-A assimetria residual de +0,33 é o que sobrou da assimetria 5,92 do alvo em
+A assimetria residual de +0,42 é o que sobrou da assimetria 5,92 do alvo em
 reais — a transformação log fez quase todo o trabalho.
 
 ### 9.2 Onde o modelo erra: nas duas pontas, não só no topo
 
 | Faixa de preço | n | Preço mediano | Viés | Erro mediano | MAE |
 |---|---|---|---|---|---|
-| Q1 (mais barato) | 638 | R$ 190 mil | **+6,3%** | **19,0%** | R$ 55 mil |
-| Q2 | 632 | R$ 410 mil | +9,1% | 14,8% | R$ 88 mil |
-| Q3 | 639 | R$ 590 mil | +0,8% | 13,2% | R$ 103 mil |
-| Q4 | 633 | R$ 830 mil | −3,8% | 15,1% | R$ 158 mil |
-| Q5 (mais caro) | 625 | R$ 1,4 mi | **−13,5%** | **19,2%** | R$ 426 mil |
+| Q1 (mais barato) | 638 | R$ 190 mil | **+6,9%** | **20,0%** | R$ 55 mil |
+| Q2 | 632 | R$ 410 mil | +10,0% | 15,9% | R$ 88 mil |
+| Q3 | 639 | R$ 590 mil | +1,0% | 13,1% | R$ 104 mil |
+| Q4 | 633 | R$ 830 mil | −4,3% | 14,7% | R$ 156 mil |
+| Q5 (mais caro) | 625 | R$ 1,4 mi | **−14,1%** | **19,5%** | R$ 441 mil |
 
 O viés troca de sinal monotonicamente do Q1 ao Q5: **o modelo puxa tudo para o
 meio.** É a regressão à média clássica de um estimador que minimiza erro — ele
@@ -280,13 +335,13 @@ regressão à média. Diagnosticar só pelo gráfico clássico esconderia o efei
 
 Consequência prática: a previsão do modelo não deve ser lida como estimativa
 pontual de um imóvel de alto padrão. Nesse segmento ela é sistematicamente
-conservadora, em cerca de 13%.
+conservadora, em cerca de 14%.
 
 Eu previa que o erro se concentraria no alto padrão, onde os dados são esparsos.
-Metade certo: o Q5 é de fato o pior, mas o Q1 empata com ele (19,0% contra
-19,2%) por um motivo diferente — não é escassez, é **qualidade de dado** (§9.5).
+Metade certo: o Q5 é de fato o pior, mas o Q1 empata com ele (20,0% contra
+19,5%) por um motivo diferente — não é escassez, é **qualidade de dado** (§9.5).
 
-O erro em reais, esse sim, cresce monotonicamente: R$ 55 mil no Q1 contra R$ 426
+O erro em reais, esse sim, cresce monotonicamente: R$ 55 mil no Q1 contra R$ 441
 mil no Q5. Para triagem em massa a leitura relevante é a percentual; para decidir
 sobre um imóvel específico, a em reais.
 
@@ -298,28 +353,28 @@ construção). Unidade: quanto o MAE em log piora ao embaralhar a coluna.
 
 | Atributo | Importância | Desvio |
 |---|---|---|
-| `bairro` | **+0,2166** | 0,0054 |
-| `area_util` | **+0,1989** | 0,0028 |
-| `garagens` | +0,0602 | 0,0020 |
-| `suites` | +0,0254 | 0,0018 |
-| `condominio` | +0,0175 | 0,0009 |
-| `quartos` | +0,0140 | 0,0011 |
-| `area_total` | +0,0100 | 0,0009 |
-| `origem_anuncio` | +0,0096 | 0,0008 |
-| `banheiros` | +0,0077 | 0,0007 |
-| `com_varanda_gourmet` | +0,0047 | 0,0007 |
+| `bairro` | **+0,2226** | 0,0056 |
+| `area_util` | **+0,2001** | 0,0030 |
+| `garagens` | +0,0616 | 0,0021 |
+| `suites` | +0,0236 | 0,0016 |
+| `condominio` | +0,0163 | 0,0008 |
+| `quartos` | +0,0114 | 0,0010 |
+| `origem_anuncio` | +0,0102 | 0,0007 |
+| `area_total` | +0,0102 | 0,0010 |
+| `banheiros` | +0,0099 | 0,0006 |
+| `com_varanda_gourmet` | +0,0045 | 0,0007 |
 
-Localização e tamanho respondem por **0,42 dos 0,60** de importância total. Cada
-um deles vale, sozinho, o dobro do MAE final inteiro (0,2146) — embaralhar
+Localização e tamanho respondem por **0,42 dos 0,61** de importância total. Cada
+um deles vale, sozinho, o dobro do MAE final inteiro (0,2145) — embaralhar
 qualquer um dos dois destrói o modelo.
 
-**28 dos 75 atributos têm importância indistinguível de zero.** Quase todos são
+**24 dos 75 atributos têm importância indistinguível de zero.** Quase todos são
 comodidades. Isso não significa que comodidade não importe: significa que, dado
 o bairro e a área, ela não acrescenta.
 
-Nota de honestidade sobre `origem_anuncio`: ele está na matriz como controle do
-artefato de portal, e a permutação confirma que o modelo o usa (+0,0096). Isso é
-esperado e é justamente por isso que ele fica — sem a coluna, a diferença entre
+Nota de honestidade sobre `origem_anuncio`: está na matriz como controle do
+artefato de portal, e a permutação confirma que o modelo a usa (+0,0102). Isso é
+esperado e é justamente por isso que ela fica — sem a coluna, a diferença entre
 portais seria absorvida como se fosse diferença entre imóveis.
 
 ### 9.4 Correlação × importância: onde os dois discordam
@@ -331,10 +386,9 @@ está o que só um dos métodos enxerga.
 
 | Feature | \|Spearman\| | Importância | Salto de posto |
 |---|---|---|---|
-| `com_lavabo` | 0,228 | +0,0000 | −92 |
-| `com_closet` | 0,177 | −0,0001 | −90 |
-| `com_playground` | 0,174 | +0,0001 | −59 |
-| `com_gerador_de_energia` | 0,131 | −0,0000 | −71 |
+| `com_lavabo` | 0,228 | +0,0001 | −92 |
+| `com_closet` | 0,177 | −0,0000 | −90 |
+| `com_gerador_de_energia` | 0,131 | −0,0001 | −71 |
 
 `com_lavabo` é a 11ª maior correlação com o preço e vale **zero** para o modelo.
 Não é contradição: lavabo correlaciona com preço porque aparece em apartamento
@@ -345,8 +399,8 @@ correlação estava medindo o efeito de outra variável através dele.
 
 | Feature | \|Spearman\| | Importância | Salto de posto |
 |---|---|---|---|
-| `bairro_bessa` | 0,012 | +0,0064 | +98 |
-| `bairro_aeroclube` | 0,039 | +0,0020 | +65 |
+| `bairro_bessa` | 0,012 | +0,0059 | +98 |
+| `bairro_aeroclube` | 0,039 | +0,0014 | +65 |
 
 `bairro_bessa` tem correlação **0,012** com o preço — praticamente nada — e ainda
 assim é uma das dummies mais úteis do modelo. O Bessa tem preço mediano de
@@ -359,12 +413,12 @@ bivariada consegue ver isso.
 
 ### 9.5 O que o resíduo revelou sobre os dados
 
-Os 16 anúncios do teste abaixo de R$ 50 mil têm erro mediano de **+136%** — o
+Os 16 anúncios do teste abaixo de R$ 50 mil têm erro mediano de **+132%** — o
 modelo prevê consistentemente muito acima. Não é falha do modelo: R$ 35 mil por
 58 m² dá R$ 603/m², contra uma mediana de **R$ 9.019/m²** na base. São entradas
 de financiamento, permutas ou erro de digitação anunciados como preço de venda.
 
-Dos 53 anúncios com erro acima de 100%, **42% têm preço/m² abaixo de R$ 1.500**.
+Dos 52 anúncios com erro acima de 100%, **40% têm preço/m² abaixo de R$ 1.500**.
 
 O piso de plausibilidade em `build_features` está em R$ 20.000, permissivo
 demais. Um piso por **preço/m²** — e não por preço absoluto — pegaria esses casos
@@ -374,11 +428,11 @@ nesta etapa.
 
 Dois outros segmentos, para fechar:
 
-- **Portal.** `zapimoveis` 15,9%, `chaves_na_mao` 17,3%, anúncios presentes nos
-  dois 14,5%. O imóvel que aparece nos dois portais é mais fácil de prever, o que
+- **Portal.** `zapimoveis` 15,8%, `chaves_na_mao` 17,5%, anúncios presentes nos
+  dois 14,3%. O imóvel que aparece nos dois portais é mais fácil de prever, o que
   faz sentido: são os anúncios com ficha mais completa.
 - **Campos ausentes.** A correlação de Spearman entre número de campos numéricos
-  em branco e erro absoluto é **0,051**. Praticamente nula — a imputação com
+  em branco e erro absoluto é **0,050**. Praticamente nula — a imputação com
   indicadora está segurando bem a ausência, e o erro não vem de lá.
 
 ### 9.6 Figuras

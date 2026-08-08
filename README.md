@@ -67,6 +67,7 @@ efeito é imediato, sem reinstalar e sem gambiarra de `sys.path`.
 | Matriz de correlação e seleção de atributos | `-m imoveis_jp.features.correlation` |
 | Treinar e avaliar os modelos | `-m imoveis_jp.models.train` |
 | Buscar hiperparâmetros | `-m imoveis_jp.models.tune` |
+| Resíduos e importância por permutação | `-m imoveis_jp.models.analysis` |
 | Rodar os testes | `-m pytest` |
 
 Detalhes do scrape (retomada, sharding, flags, ética/robots.txt): [docs/scraping.md](docs/scraping.md).
@@ -79,6 +80,10 @@ Detalhes do scrape (retomada, sharding, flags, ética/robots.txt): [docs/scrapin
 2. ~~Extração via LLM das características que só existem na descrição~~
 3. ~~One-hot + matriz de correlação para enxugar atributos~~ → `src/imoveis_jp/features/`
 4. ~~Treino e avaliação dos modelos~~ → `src/imoveis_jp/models/`
+5. Comparar seis modelos sob protocolo pré-registrado → issues
+   [#20](../../issues/20) (infra, bloqueante), [#21](../../issues/21) árvore,
+   [#22](../../issues/22) KNN, [#23](../../issues/23) MLP,
+   [#24](../../issues/24) OLS, [#25](../../issues/25) comparação final
 
 ### Etapa 3 — como funciona
 
@@ -119,7 +124,7 @@ estatística atravessa a fronteira treino/validação. O teste é tocado uma ún
 
 | Modelo | CV MAE (log) | Teste MAE | Erro % mediano | R² (log) |
 |---|---|---|---|---|
-| Gradient Boosting ajustado | 0,2183 | R$ 165.112 | 16,0% | 0,868 |
+| Gradient Boosting ajustado | 0,2155 | R$ 167.866 | 16,2% | 0,868 |
 | Gradient Boosting (padrão) | 0,2238 | R$ 171.392 | 17,0% | 0,861 |
 | Ridge | 0,2906 | R$ 290.742 | 22,3% | 0,766 |
 | Baseline (mediana) | 0,6531 | R$ 417.354 | 42,5% | −0,001 |
@@ -131,11 +136,11 @@ Metodologia, decisões e limitações: [docs/modelagem.md](docs/modelagem.md).
 `analysis` mede, **no conjunto de teste**, onde o modelo erra e do que ele
 depende. Três resultados:
 
-- **O modelo puxa tudo para o meio.** O viés vai de +6,3% no quintil mais barato
-  a −13,5% no mais caro, trocando de sinal monotonicamente. As duas pontas são as
-  piores faixas (19,0% e 19,2% de erro mediano) contra 13,2% no centro.
-- **`bairro` e `area_util` sozinhos valem 0,42 dos 0,60 de importância total.**
-  28 dos 75 atributos têm importância indistinguível de zero.
+- **O modelo puxa tudo para o meio.** O viés vai de +6,9% no quintil mais barato
+  a −14,1% no mais caro, trocando de sinal monotonicamente. As duas pontas são as
+  piores faixas (20,0% e 19,5% de erro mediano) contra 13,1% no centro.
+- **`bairro` e `area_util` sozinhos valem 0,42 dos 0,61 de importância total.**
+  24 dos 75 atributos têm importância indistinguível de zero.
 - **Correlação não é importância.** `com_lavabo` é a 11ª maior correlação com o
   preço e vale zero para o modelo; `bairro_bessa` tem correlação 0,012 e é uma
   das dummies mais úteis. A primeira é efeito de área e bairro vazando por uma
@@ -143,7 +148,7 @@ depende. Três resultados:
   Ridge.
 
 A análise também expôs um problema de dado: os 16 anúncios abaixo de R$ 50 mil
-erram +136% na mediana porque não são preços de venda (R$ 603/m² contra uma
+erram +132% na mediana porque não são preços de venda (R$ 603/m² contra uma
 mediana de R$ 9.019/m²). Detalhes e o que fazer: §9 de
 [docs/modelagem.md](docs/modelagem.md).
 
