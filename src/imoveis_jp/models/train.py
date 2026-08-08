@@ -101,12 +101,21 @@ def montar_modelos(
         ),
         # vencedora do GridSearchCV de imoveis_jp.models.tune, fixada aqui para
         # o treino ser reproduzivel sem depender de rodar a busca antes.
+        #
+        # min_samples_leaf=10 e um EMPATE resolvido fora da CV, e vale registrar
+        # como tal. A busca devolveu 5 (0,2154) contra 10 (0,2155): 0,0001 de
+        # diferenca, contra um desvio entre folds de 0,0037. Pelo criterio de
+        # decisao do projeto (>= 0,005 para declarar vantagem) isso e empate, e
+        # nenhum dos criterios de desempate -- explicabilidade, custo, numero de
+        # hiperparametros -- separa os dois. O voto de minerva foi o argumento de
+        # dominio ja documentado na grade: preco de imovel tem cauda longa, e
+        # folha maior dificulta a arvore isolar um unico anuncio de alto padrao.
         "gradient_boosting_ajustado": com_preparo(
             HistGradientBoostingRegressor(
                 learning_rate=0.05,
                 max_iter=500,
                 max_leaf_nodes=127,
-                min_samples_leaf=20,
+                min_samples_leaf=10,
                 l2_regularization=0.0,
                 random_state=dataset.SEMENTE,
             )
