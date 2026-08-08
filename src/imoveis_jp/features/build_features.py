@@ -145,9 +145,10 @@ FREQUENCIA_MINIMA = 0.01
 #:    e combinacao linear das outras: a Ridge a absorve na regularizacao e a
 #:    arvore nao acha ganho para dividir em 99,6%/0,4%.
 #:
-#: o item 2 e argumento estrutural, nao medicao. A importancia por permutacao em
-#: imoveis_jp.models.analysis mede isso de fato -- se essas colunas aparecerem
-#: com importancia nao-nula, este comentario e que esta errado.
+#: o item 2 e argumento estrutural, nao medicao -- e fica PENDENTE de verificacao.
+#: importancia por permutacao sobre o teste responderia isso com numero: se essas
+#: colunas aparecerem com importancia nao-nula, este comentario e que esta errado.
+
 #: toda binaria de comodidade sai prefixada, para nunca colidir com uma coluna
 #: numerica de mesmo nome -- foi assim que 'suites' e 'banheiros' se perderam.
 PREFIXO_COMODIDADE = "com_"

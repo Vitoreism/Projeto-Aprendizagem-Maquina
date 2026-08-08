@@ -96,8 +96,10 @@ e colinearidade embutida. `build_features` consolida tudo numa matriz só:
 - descarta pseudo-atributos (`apartamento`, `lazer`, `conforto`…) e comodidades
   presentes em menos de 1% dos imóveis;
 - anula valores fora da faixa plausível (havia preço de R$ 470 milhões);
-- aplica one-hot em `posicao_solar`, `status_construcao`, `tipo_unidade`,
-  `origem_anuncio` e `bairro`.
+- normaliza `posicao_solar`, `status_construcao`, `tipo_unidade`,
+  `origem_anuncio` e `bairro` como **texto**. O one-hot delas acontece dentro do
+  `Pipeline` de treino, não aqui — fazê-lo sobre a base inteira definia o
+  conjunto de colunas usando as linhas que virariam teste.
 
 `correlation` roda em cima da matriz e gera, em `data/processed/`, o ranking de
 cada atributo contra o preço (`correlacao_alvo.csv`), a poda dos redundantes
@@ -111,15 +113,15 @@ Números, decisões e a pendência da extração via LLM no zap:
 
 Split 80/20 **agrupado por imóvel físico** (o mesmo apartamento aparece em até 7
 anúncios; com split aleatório ele cairia no treino e no teste), semente `42`,
-alvo em `log(preco_venda)`. Imputação e padronização ficam dentro de um `Pipeline`
-do sklearn, reajustado em cada fold do `GroupKFold(5)` — nenhuma estatística
-atravessa a fronteira treino/validação. O teste é tocado uma única vez.
+alvo em `log(preco_venda)`. Imputação, padronização **e one-hot** ficam dentro de
+um `Pipeline` do sklearn, reajustado em cada fold do `GroupKFold(5)` — nenhuma
+estatística atravessa a fronteira treino/validação. O teste é tocado uma única vez.
 
 | Modelo | CV MAE (log) | Teste MAE | Erro % mediano | R² (log) |
 |---|---|---|---|---|
-| Gradient Boosting ajustado | 0,2232 | R$ 166.660 | 16,4% | 0,863 |
-| Gradient Boosting (padrão) | 0,2306 | R$ 173.672 | 17,7% | 0,857 |
-| Ridge | 0,3037 | R$ 301.659 | 23,6% | 0,744 |
+| Gradient Boosting ajustado | 0,2183 | R$ 165.112 | 16,0% | 0,868 |
+| Gradient Boosting (padrão) | 0,2238 | R$ 171.392 | 17,0% | 0,861 |
+| Ridge | 0,2906 | R$ 290.742 | 22,3% | 0,766 |
 | Baseline (mediana) | 0,6531 | R$ 417.354 | 42,5% | −0,001 |
 
 Metodologia, decisões e limitações: [docs/modelagem.md](docs/modelagem.md).
