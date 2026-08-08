@@ -233,3 +233,167 @@ modesto, e bem menor que o salto de Ridge para boosting (0,08).
 exatamente o default 1,0. Isso é informação, não fracasso: o gargalo do modelo
 linear não é regularização, é forma funcional — ele não representa as interações
 que o boosting captura.
+
+---
+
+## 9. Análise de resíduos e importância por permutação
+
+`src/imoveis_jp/models/analysis.py`. Tudo medido no **conjunto de teste**, sobre o
+`gradient_boosting_ajustado`.
+
+A escolha do teste é deliberada: importância medida no treino responde "do que o
+modelo se lembrou", e a pergunta do projeto é "do que ele precisa para acertar
+num imóvel que nunca viu". O preço é que o teste já foi usado para relatar a
+métrica final — por isso **nada daqui volta para o modelo como seleção de
+atributo**. É leitura, não decisão.
+
+### 9.1 Os resíduos estão centrados
+
+```
+média = +0,0022   mediana = +0,0001   desvio = 0,2988   assimetria = +0,33
+```
+
+Em log, a mediana do resíduo é praticamente zero: o modelo não tem viés global.
+A assimetria residual de +0,33 é o que sobrou da assimetria 5,92 do alvo em
+reais — a transformação log fez quase todo o trabalho.
+
+### 9.2 Onde o modelo erra: nas duas pontas, não só no topo
+
+| Faixa de preço | n | Preço mediano | Viés | Erro mediano | MAE |
+|---|---|---|---|---|---|
+| Q1 (mais barato) | 638 | R$ 190 mil | **+6,3%** | **19,0%** | R$ 55 mil |
+| Q2 | 632 | R$ 410 mil | +9,1% | 14,8% | R$ 88 mil |
+| Q3 | 639 | R$ 590 mil | +0,8% | 13,2% | R$ 103 mil |
+| Q4 | 633 | R$ 830 mil | −3,8% | 15,1% | R$ 158 mil |
+| Q5 (mais caro) | 625 | R$ 1,4 mi | **−13,5%** | **19,2%** | R$ 426 mil |
+
+O viés troca de sinal monotonicamente do Q1 ao Q5: **o modelo puxa tudo para o
+meio.** É a regressão à média clássica de um estimador que minimiza erro — ele
+prefere errar pouco em muitos imóveis a acertar os extremos.
+
+Vale reparar numa aparente contradição com a figura: no painel "resíduo × valor
+previsto" a mediana por vintil é uma linha reta em zero, sem viés nenhum. Os dois
+resultados estão certos e medem coisas diferentes — o painel condiciona no
+**previsto**, a tabela condiciona no **real**. Um modelo não-enviesado dado o que
+ele mesmo previu ainda é enviesado dado a verdade, e essa diferença *é* a
+regressão à média. Diagnosticar só pelo gráfico clássico esconderia o efeito.
+
+Consequência prática: a previsão do modelo não deve ser lida como estimativa
+pontual de um imóvel de alto padrão. Nesse segmento ela é sistematicamente
+conservadora, em cerca de 13%.
+
+Eu previa que o erro se concentraria no alto padrão, onde os dados são esparsos.
+Metade certo: o Q5 é de fato o pior, mas o Q1 empata com ele (19,0% contra
+19,2%) por um motivo diferente — não é escassez, é **qualidade de dado** (§9.5).
+
+O erro em reais, esse sim, cresce monotonicamente: R$ 55 mil no Q1 contra R$ 426
+mil no Q5. Para triagem em massa a leitura relevante é a percentual; para decidir
+sobre um imóvel específico, a em reais.
+
+### 9.3 Importância por permutação: o modelo depende de duas coisas
+
+Atributo inteiro permutado (não dummy a dummy — permutar uma dummy de bairro por
+vez deixaria as outras 328 entregando a resposta e a importância sairia zero por
+construção). Unidade: quanto o MAE em log piora ao embaralhar a coluna.
+
+| Atributo | Importância | Desvio |
+|---|---|---|
+| `bairro` | **+0,2166** | 0,0054 |
+| `area_util` | **+0,1989** | 0,0028 |
+| `garagens` | +0,0602 | 0,0020 |
+| `suites` | +0,0254 | 0,0018 |
+| `condominio` | +0,0175 | 0,0009 |
+| `quartos` | +0,0140 | 0,0011 |
+| `area_total` | +0,0100 | 0,0009 |
+| `origem_anuncio` | +0,0096 | 0,0008 |
+| `banheiros` | +0,0077 | 0,0007 |
+| `com_varanda_gourmet` | +0,0047 | 0,0007 |
+
+Localização e tamanho respondem por **0,42 dos 0,60** de importância total. Cada
+um deles vale, sozinho, o dobro do MAE final inteiro (0,2146) — embaralhar
+qualquer um dos dois destrói o modelo.
+
+**28 dos 75 atributos têm importância indistinguível de zero.** Quase todos são
+comodidades. Isso não significa que comodidade não importe: significa que, dado
+o bairro e a área, ela não acrescenta.
+
+Nota de honestidade sobre `origem_anuncio`: ele está na matriz como controle do
+artefato de portal, e a permutação confirma que o modelo o usa (+0,0096). Isso é
+esperado e é justamente por isso que ele fica — sem a coluna, a diferença entre
+portais seria absorvida como se fosse diferença entre imóveis.
+
+### 9.4 Correlação × importância: onde os dois discordam
+
+A correlação é bivariada, o modelo é multivariado. Onde as duas listas divergem
+está o que só um dos métodos enxerga.
+
+**A correlação prometia mais do que o modelo usa:**
+
+| Feature | \|Spearman\| | Importância | Salto de posto |
+|---|---|---|---|
+| `com_lavabo` | 0,228 | +0,0000 | −92 |
+| `com_closet` | 0,177 | −0,0001 | −90 |
+| `com_playground` | 0,174 | +0,0001 | −59 |
+| `com_gerador_de_energia` | 0,131 | −0,0000 | −71 |
+
+`com_lavabo` é a 11ª maior correlação com o preço e vale **zero** para o modelo.
+Não é contradição: lavabo correlaciona com preço porque aparece em apartamento
+grande de bairro caro. Dado `area_util` e `bairro`, ele não acrescenta nada — a
+correlação estava medindo o efeito de outra variável através dele.
+
+**O modelo usa mais do que a correlação sugeria:**
+
+| Feature | \|Spearman\| | Importância | Salto de posto |
+|---|---|---|---|
+| `bairro_bessa` | 0,012 | +0,0064 | +98 |
+| `bairro_aeroclube` | 0,039 | +0,0020 | +65 |
+
+`bairro_bessa` tem correlação **0,012** com o preço — praticamente nada — e ainda
+assim é uma das dummies mais úteis do modelo. O Bessa tem preço mediano de
+R$ 570 mil, colado na mediana geral de R$ 575 mil, então a correlação linear com
+o preço é nula por construção. O que o bairro informa é a relação **preço por
+m²** dentro dele, que só existe em interação com `area_util`. Nenhuma correlação
+bivariada consegue ver isso.
+
+**Esta é a resposta prática de por que o boosting ganha do Ridge por 0,07.**
+
+### 9.5 O que o resíduo revelou sobre os dados
+
+Os 16 anúncios do teste abaixo de R$ 50 mil têm erro mediano de **+136%** — o
+modelo prevê consistentemente muito acima. Não é falha do modelo: R$ 35 mil por
+58 m² dá R$ 603/m², contra uma mediana de **R$ 9.019/m²** na base. São entradas
+de financiamento, permutas ou erro de digitação anunciados como preço de venda.
+
+Dos 53 anúncios com erro acima de 100%, **42% têm preço/m² abaixo de R$ 1.500**.
+
+O piso de plausibilidade em `build_features` está em R$ 20.000, permissivo
+demais. Um piso por **preço/m²** — e não por preço absoluto — pegaria esses casos
+sem descartar imóvel pequeno legitimamente barato. Fica registrado como próximo
+passo; não foi aplicado agora porque mudaria a base sob os números já relatados
+nesta etapa.
+
+Dois outros segmentos, para fechar:
+
+- **Portal.** `zapimoveis` 15,9%, `chaves_na_mao` 17,3%, anúncios presentes nos
+  dois 14,5%. O imóvel que aparece nos dois portais é mais fácil de prever, o que
+  faz sentido: são os anúncios com ficha mais completa.
+- **Campos ausentes.** A correlação de Spearman entre número de campos numéricos
+  em branco e erro absoluto é **0,051**. Praticamente nula — a imputação com
+  indicadora está segurando bem a ausência, e o erro não vem de lá.
+
+### 9.6 Figuras
+
+| Arquivo | Conteúdo |
+|---|---|
+| `docs/figuras/residuos_diagnostico.png` | 4 painéis: resíduo × previsto, distribuição, erro por faixa, previsto × real |
+| `docs/figuras/importancia_permutacao.png` | top 20 por permutação, com barra de erro |
+
+### 9.7 Execução
+
+```powershell
+.\.venv\Scripts\python.exe -m imoveis_jp.models.analysis
+```
+
+Saídas em `data/processed/`: `residuos_teste.csv`, `residuos_por_segmento.csv`,
+`importancia_permutacao.csv`, `importancia_permutacao_codificada.csv` (esta com o
+`|Spearman|` ao lado, para o confronto de §9.4).

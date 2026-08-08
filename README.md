@@ -126,6 +126,27 @@ estatística atravessa a fronteira treino/validação. O teste é tocado uma ún
 
 Metodologia, decisões e limitações: [docs/modelagem.md](docs/modelagem.md).
 
+### Etapa 4b — resíduos e importância por permutação
+
+`analysis` mede, **no conjunto de teste**, onde o modelo erra e do que ele
+depende. Três resultados:
+
+- **O modelo puxa tudo para o meio.** O viés vai de +6,3% no quintil mais barato
+  a −13,5% no mais caro, trocando de sinal monotonicamente. As duas pontas são as
+  piores faixas (19,0% e 19,2% de erro mediano) contra 13,2% no centro.
+- **`bairro` e `area_util` sozinhos valem 0,42 dos 0,60 de importância total.**
+  28 dos 75 atributos têm importância indistinguível de zero.
+- **Correlação não é importância.** `com_lavabo` é a 11ª maior correlação com o
+  preço e vale zero para o modelo; `bairro_bessa` tem correlação 0,012 e é uma
+  das dummies mais úteis. A primeira é efeito de área e bairro vazando por uma
+  proxy; a segunda só funciona em interação — que é por que o boosting ganha do
+  Ridge.
+
+A análise também expôs um problema de dado: os 16 anúncios abaixo de R$ 50 mil
+erram +136% na mediana porque não são preços de venda (R$ 603/m² contra uma
+mediana de R$ 9.019/m²). Detalhes e o que fazer: §9 de
+[docs/modelagem.md](docs/modelagem.md).
+
 Por que a extração via LLM do zap continua pendente — e por que completá-la
 provavelmente não vale a pena:
 [docs/extracao_zap_diagnostico.md](docs/extracao_zap_diagnostico.md).

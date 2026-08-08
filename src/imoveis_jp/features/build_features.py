@@ -140,14 +140,17 @@ FREQUENCIA_MINIMA = 0.01
 #:    var < 0,0099, ou seja, tambem tudo com p < 0,01. Isso reimporia o corte
 #:    de 1% que esta branch acabou de remover: 1% do treino sao 103 anuncios,
 #:    e os 329 bairros com suporte voltariam a ser 38.
-#: 2. o custo de manter as tres colunas quase-constantes e proximo de zero. Sem
-#:    drop='first', cada grupo de one-hot ja soma 1, entao a categoria dominante
-#:    e combinacao linear das outras: a Ridge a absorve na regularizacao e a
-#:    arvore nao acha ganho para dividir em 99,6%/0,4%.
+#: 2. o custo de manter as tres colunas quase-constantes e desprezivel, e agora
+#:    isso esta medido, nao suposto. A importancia por permutacao no teste
+#:    (imoveis_jp.models.analysis) da, em MAE(log):
 #:
-#: o item 2 e argumento estrutural, nao medicao -- e fica PENDENTE de verificacao.
-#: importancia por permutacao sobre o teste responderia isso com numero: se essas
-#: colunas aparecerem com importancia nao-nula, este comentario e que esta errado.
+#:      tipo_unidade_apartamento_tipo     0,0000069
+#:      posicao_solar_nao_informado       0,0000235
+#:      status_construcao_nao_informado   0,0000640  (nem distinguivel de zero)
+#:
+#:    contra um MAE total de 0,2146 -- as tres somam 0,04% do erro. Nao e zero
+#:    exato: a arvore chega a dividir em 99,6%/0,4%, so que o ganho e ruido.
+#:    Cortar as tres economizaria 3 colunas de 349 e mexeria na 4a casa decimal.
 
 #: toda binaria de comodidade sai prefixada, para nunca colidir com uma coluna
 #: numerica de mesmo nome -- foi assim que 'suites' e 'banheiros' se perderam.
