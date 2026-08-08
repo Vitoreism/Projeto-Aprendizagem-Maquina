@@ -112,6 +112,9 @@ NAO_COMODIDADES = {
     "lazer",
     "praticidade",
     "localizacao_privilegiada",
+    # so aparece explicita no texto em 8,4% dos imoveis, contra 92,2% com
+    # 'garagens' (numerica) > 0 -- mede mencao no anuncio, nao vaga real.
+    "vaga_garagem",
 }
 
 #: falsos positivos do casamento por substring de mapear_sinonimos:
@@ -123,8 +126,28 @@ CATEGORICAS = ["posicao_solar", "status_construcao", "tipo_unidade", "origem_anu
 
 FREQUENCIA_MINIMA = 0.01
 
-#: agrupamento de bairro raro e corte de dummies rara saem daqui: dependem de
-#: contagem sobre a base, entao vivem no OneHotEncoder dentro do Pipeline.
+#: o corte por FREQUENCIA_MINIMA acima continua aqui porque atua sobre as
+#: comodidades ANTES de virarem coluna: e decisao de vocabulario, nao selecao
+#: de feature. ja o agrupamento de bairro raro e o corte de dummy rara saem
+#: daqui -- contavam linhas da base inteira, incluindo as que virariam teste --
+#: e viram min_frequency do OneHotEncoder, ajustado por fold.
+#:
+#: o corte espelhado de dummy quase-constante (FREQUENCIA_MAXIMA_DUMMY = 0,99,
+#: vindo do fix de limpeza do one-hot) NAO foi reimplantado, por dois motivos:
+#:
+#: 1. nao ha "max_frequency" no OneHotEncoder, e o substituto obvio -- um
+#:    VarianceThreshold -- e simetrico: calibrado para p > 0,99 ele corta
+#:    var < 0,0099, ou seja, tambem tudo com p < 0,01. Isso reimporia o corte
+#:    de 1% que esta branch acabou de remover: 1% do treino sao 103 anuncios,
+#:    e os 329 bairros com suporte voltariam a ser 38.
+#: 2. o custo de manter as tres colunas quase-constantes e proximo de zero. Sem
+#:    drop='first', cada grupo de one-hot ja soma 1, entao a categoria dominante
+#:    e combinacao linear das outras: a Ridge a absorve na regularizacao e a
+#:    arvore nao acha ganho para dividir em 99,6%/0,4%.
+#:
+#: o item 2 e argumento estrutural, nao medicao. A importancia por permutacao em
+#: imoveis_jp.models.analysis mede isso de fato -- se essas colunas aparecerem
+#: com importancia nao-nula, este comentario e que esta errado.
 #: toda binaria de comodidade sai prefixada, para nunca colidir com uma coluna
 #: numerica de mesmo nome -- foi assim que 'suites' e 'banheiros' se perderam.
 PREFIXO_COMODIDADE = "com_"

@@ -89,7 +89,7 @@ def mapear_sinonimos(nome_comodidade: str) -> str:
         return "gas_canalizado"
     if "pista" in s or "cooper" in s or "caminhada" in s or "trilha" in s:
         return "pista_caminhada_cooper"
-    if "dependencia" in s or "funcionario" in s:
+    if "dependencia" in s or "funcionari" in s:
         return "dependencia_empregados"
     if "cinema" in s or "theater" in s or "video" in s:
         return "cinema"
@@ -97,6 +97,8 @@ def mapear_sinonimos(nome_comodidade: str) -> str:
         return "fechadura_digital"
     if "spa" in s or "hidro" in s or "jacuzzi" in s or "banheira" in s:
         return "spa_hidromassagem"
+    if "aluminio" in s:
+        return "janela_aluminio"
 
     return s
 
