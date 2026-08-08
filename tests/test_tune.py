@@ -13,7 +13,7 @@ from imoveis_jp.models import dataset, train, tune
 
 
 def _buscas():
-    return tune.montar_buscas(["area_util"], ["com_piscina"])
+    return tune.montar_buscas(["area_util"], ["com_piscina"], ["bairro"])
 
 
 def test_busca_usa_validacao_cruzada_agrupada():

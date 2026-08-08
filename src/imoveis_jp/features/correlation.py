@@ -40,6 +40,12 @@ LIMIAR_ARTEFATO = 0.50
 
 TOP_HEATMAP = 30
 
+#: agrupamento de categoria rara so para a EDA. o valor espelha o
+#: MINIMO_POR_CATEGORIA do Pipeline de treino, mas os dois sao independentes:
+#: aqui a contagem e sobre a base inteira de proposito, porque o objetivo e
+#: descrever os dados, nao treinar. la a contagem e so do fold de treino.
+MINIMO_POR_CATEGORIA_EDA = 30
+
 
 def carregar() -> pd.DataFrame:
     if not ENTRADA.exists():
@@ -52,6 +58,26 @@ def carregar() -> pd.DataFrame:
 
     df = pd.read_csv(ENTRADA, low_memory=False)
     print(f"[Info] Matriz de features: {df.shape[0]} imoveis x {df.shape[1]} colunas.", flush=True)
+
+    # as nominais chegam como texto (o one-hot de verdade vive no Pipeline do
+    # treino, ajustado so no fold). aqui elas viram dummies apenas para entrar
+    # na matriz de correlacao. e EDA sobre a base inteira, e isso e legitimo
+    # DESDE QUE a saida deste modulo nao filtre o treino -- ver o cabecalho.
+    nominais = [c for c in df.columns if df[c].dtype == object or df[c].dtype == "str"]
+    nominais = [c for c in nominais if c != "url_anuncio"]
+    if nominais:
+        raras = {}
+        for col in nominais:
+            contagem = df[col].value_counts()
+            raras[col] = contagem[contagem < MINIMO_POR_CATEGORIA_EDA].index
+            df[col] = df[col].where(~df[col].isin(raras[col]), "outros")
+        dummies = pd.get_dummies(df[nominais], prefix=nominais, dtype="int8")
+        df = pd.concat([df.drop(columns=nominais), dummies], axis=1)
+        print(
+            f"[Info] {len(nominais)} nominais -> {dummies.shape[1]} dummies (so para a EDA).",
+            flush=True,
+        )
+
     return df
 
 

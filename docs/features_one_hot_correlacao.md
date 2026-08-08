@@ -66,7 +66,7 @@ gerada é reparada na etapa seguinte.
 ## 3. `build_features.py` — a consolidação
 
 Roda em cima de `imoveis_joao_pessoa_global_deduplicated.csv` e produz
-`data/processed/features_matrix.csv`. **231 → 101 colunas.**
+`data/processed/features_matrix.csv`. **231 → 77 colunas.**
 
 ### 3.1 Reparo das numéricas destruídas
 
@@ -83,7 +83,7 @@ Cada célula não-numérica é reconstruída a partir do JSON bruto, casando por
 
 Cada coluna é reduzida a um nome canônico por `normalizar_texto` + `mapear_sinonimos`
 e as equivalentes são fundidas por OR lógico, com `NaN` tratado como ausência.
-**205 binárias → 159 canônicas, em 29 grupos fundidos.** Isso resolve de uma vez
+**205 binárias → 157 canônicas, em 30 grupos fundidos.** Isso resolve de uma vez
 os defeitos 1, 2 e 3 da seção 1.
 
 Duas ressalvas importantes:
@@ -103,19 +103,32 @@ Duas ressalvas importantes:
   anúncio de 58 milhões de m² anulava a estatística. Anulados: `area_util` 134,
   `area_total` 70, `condominio` 35, `garagens` 10, `preco_venda` 8, `iptu` 5,
   `quartos` 2, `suites` 2, `banheiros` 1.
-- **Frequência mínima de 1%** e remoção dos pseudo-atributos: 12 + 82 colunas
-  descartadas, **restam 65 comodidades**.
+- **Frequência mínima de 1%** e remoção dos pseudo-atributos: 13 + 82 colunas
+  descartadas, **restam 62 comodidades**.
 
-### 3.4 One-hot do que ainda era categórico
+### 3.4 O one-hot das categóricas não mora mais aqui
 
 | Coluna | Tratamento |
 |---|---|
-| `posicao_solar`, `status_construcao`, `tipo_unidade`, `origem_anuncio` | `get_dummies` |
-| `bairro` | preenchido pelo endereço via `extrair_bairro`; categorias com menos de 30 imóveis viram `outros` → 38 níveis |
+| `posicao_solar`, `status_construcao`, `tipo_unidade`, `origem_anuncio` | normalizadas como **texto** |
+| `bairro` | preenchido pelo endereço via `extrair_bairro` → **329 níveis**, todos preservados |
 | `anunciante` (442 níveis) | **descartado** — ver §3.5 |
 
-Ao todo, **5 categóricas → 56 dummies**, das quais 30 caem no corte de 1% (havia
-`tipo_unidade_duplex` com 0,01%, 2 imóveis em 16 mil). **Restam 26.**
+A versão anterior desta etapa fazia `pd.get_dummies` aqui, com dois cortes de
+frequência: bairro com menos de 30 imóveis virava `outros` (sobravam 38 níveis) e
+dummy abaixo de 1% era descartada. Os dois contavam linhas da **base inteira**,
+incluindo as que virariam teste — **vazamento estrutural**.
+
+O one-hot passou para dentro do `Pipeline` de treino (`OneHotEncoder` com
+`min_frequency=30` e `handle_unknown='infrequent_if_exist'`), onde a contagem
+acontece dentro de cada fold. Não custou acurácia; ganhou. Os números estão em
+[§3.1 de modelagem.md](modelagem.md).
+
+Nesta matriz, portanto, **5 categóricas continuam 5 colunas de texto**. O corte
+espelhado de dummy quase-constante (frequência > 99%) não foi reimplantado, e o
+motivo está no comentário de `build_features.py`: o substituto natural dentro do
+`Pipeline` seria um `VarianceThreshold`, que é simétrico e cortaria junto tudo
+abaixo de 1% — devolvendo os 329 bairros para 38.
 
 ### 3.5 Duas features removidas por vazamento
 
@@ -137,7 +150,7 @@ desta própria base, bairro a bairro:
 
 **Correlação 0,996, erro relativo mediano 2,4%.** É uma agregação do alvo, e era a
 6ª feature mais forte do ranking (Spearman +0,504). O efeito de bairro segue
-coberto pelas dummies, que não tocam no alvo.
+coberto pela própria coluna `bairro`, que não toca no alvo.
 
 **`anunciante_qtd_anuncios`** era `value_counts()` sobre a base inteira: a
 contagem de cada anunciante incluía os anúncios que cairiam no teste.
@@ -192,10 +205,10 @@ o imóvel. O módulo sinaliza toda feature com |r| ≥ 0,50 contra `origem_anunc
 
 | Arquivo | Conteúdo |
 |---|---|
-| `data/processed/features_matrix.csv` | a matriz consolidada, 16.162 × 101 |
+| `data/processed/features_matrix.csv` | a matriz consolidada, 16.162 × 77 |
 | `data/processed/correlacao_alvo.csv` | ranking de cada feature contra os três alvos |
 | `data/processed/pares_redundantes.csv` | decisões da poda, com o motivo |
-| `data/processed/features_selecionadas.csv` | as 98 features que sobraram (uso de EDA — ver §3.5) |
+| `data/processed/features_selecionadas.csv` | as 121 features que sobraram (uso de EDA — ver §3.5) |
 | `data/interim/relatorio_consolidacao.json` | auditoria da consolidação |
 | `docs/figuras/heatmap_top30.png` | top 30 por correlação com o preço |
 | `docs/figuras/heatmap_completo.png` | matriz das features selecionadas |

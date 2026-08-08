@@ -15,7 +15,7 @@
 | Alvo | `log(preco_venda)` |
 | Observações | 15.987 anúncios com preço |
 | Imóveis físicos distintos | 14.224 |
-| Features | 99 |
+| Features | 75 na matriz → 349 depois do one-hot dentro do `Pipeline` |
 | Semente | `42`, em `dataset.SEMENTE` |
 
 O alvo vai para log porque a distribuição em reais tem **assimetria 5,92 e curtose
@@ -49,23 +49,54 @@ Resultado: **12.820 no treino, 3.167 no teste, 0 grupos dos dois lados.** O
 
 ```
 ColumnTransformer
-├── numéricas (8):  SimpleImputer(mediana, add_indicator) → StandardScaler
-└── binárias (91):  passthrough
+├── numéricas (8):   SimpleImputer(mediana, add_indicator) → StandardScaler
+├── binárias (62):   passthrough
+└── nominais (5):    OneHotEncoder(min_frequency=30,
+                                   handle_unknown='infrequent_if_exist')
 ```
 
-Imputação e escala **não** acontecem antes do split. Elas moram dentro do
-`Pipeline`, então o `fit` é refeito em cada fold da validação cruzada e nenhuma
-estatística do fold de validação entra no de treino.
+Imputação, escala **e o one-hot** não acontecem antes do split. Os três moram
+dentro do `Pipeline`, então o `fit` é refeito em cada fold da validação cruzada e
+nenhuma estatística do fold de validação entra no de treino.
 
-Duas decisões que valem justificativa:
+Três decisões que valem justificativa:
 
 - **`add_indicator=True`.** Com `iptu` ausente em 80% dos anúncios, `area_total`
   em 61% e `suites`/`condominio` perto de 47% e 54%, o próprio silêncio do anunciante é
   informação. A indicadora preserva isso; imputar sem ela apagaria o sinal.
 - **Mediana, não média.** Pelo mesmo motivo do log: as caudas são pesadas.
+- **`OneHotEncoder` no `Pipeline`, não `get_dummies` na matriz.** Ver §3.1.
 
 As binárias passam direto — já estão em 0/1, e padronizá-las só destruiria a
 interpretação sem ganho.
+
+### 3.1 Por que o one-hot saiu do `build_features`
+
+Enquanto as nominais viravam dummies com `pd.get_dummies` sobre a base inteira,
+duas decisões eram tomadas contando linhas que virariam teste:
+
+1. bairro com menos de 30 imóveis colapsava em `outros`;
+2. dummy com frequência abaixo de 1% era descartada.
+
+Nenhuma das duas olha o alvo, então não é vazamento de alvo — é **vazamento
+estrutural**: o conjunto de colunas é definido usando o teste. A correção previa
+custo em acurácia. Aconteceu o contrário:
+
+| Modelo | CV antes | CV depois |
+|---|---|---|
+| Gradient Boosting ajustado | 0,2232 | **0,2183** |
+| Gradient Boosting (padrão) | 0,2306 | **0,2238** |
+| Ridge | 0,3037 | **0,2906** |
+
+O motivo é que os cortes globais **destruíam informação**. O encoder por fold
+preserva toda categoria com suporte no treino: são **329 bairros distintos**,
+contra os 38 que sobravam antes. A matriz caiu de 101 para 75 colunas, mas isso
+é aparência — 26 dummies viraram 5 colunas de texto e o modelo passou a enxergar
+349 colunas depois da codificação, não menos.
+
+`handle_unknown='infrequent_if_exist'` manda bairro que só aparece no teste para
+o mesmo balde das categorias raras, em vez de quebrar ou de virar coluna que o
+modelo nunca viu.
 
 ---
 
@@ -84,16 +115,16 @@ de modelo.
 
 | Modelo | CV MAE (log) | Teste MAE | Erro % mediano | R² (log) |
 |---|---|---|---|---|
-| **Gradient Boosting ajustado** | **0,2232 ± 0,0031** | **R$ 166.660** | **16,4%** | **0,863** |
-| Gradient Boosting (padrão) | 0,2306 ± 0,0034 | R$ 173.672 | 17,7% | 0,857 |
-| Ridge | 0,3037 ± 0,0050 | R$ 301.659 | 23,6% | 0,744 |
+| **Gradient Boosting ajustado** | **0,2183 ± 0,0041** | **R$ 165.112** | **16,0%** | **0,868** |
+| Gradient Boosting (padrão) | 0,2238 ± 0,0032 | R$ 171.392 | 17,0% | 0,861 |
+| Ridge | 0,2906 ± 0,0045 | R$ 290.742 | 22,3% | 0,766 |
 | Baseline (mediana) | 0,6531 ± 0,0047 | R$ 417.354 | 42,5% | −0,001 |
 
 O baseline existe como piso de sanidade: prever sempre a mediana. Seu R² de
 −0,001 confirma que a montagem está correta — um baseline honesto tem que ficar
 em torno de zero.
 
-O gradient boosting ajustado erra **16,4% na mediana**. Para um imóvel de R$ 575 mil, isso
+O gradient boosting ajustado erra **16,0% na mediana**. Para um imóvel de R$ 575 mil, isso
 é uma faixa de cerca de R$ 100 mil — aceitável para triagem, insuficiente para
 avaliação individual. O desvio da CV é pequeno (±0,004) frente à diferença entre
 os modelos (0,07), então a vantagem sobre o Ridge é real, não ruído de partição.
