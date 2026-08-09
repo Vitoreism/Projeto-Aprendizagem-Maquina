@@ -88,3 +88,46 @@ def test_alvo_vai_para_log():
     assert y.name == "log_preco"
     # em reais a assimetria é 5,92; em log tem que cair para perto de zero
     assert abs(pd.Series(y).skew()) < 1.0
+
+
+def test_nominais_chegam_como_texto_nao_como_dummies():
+    """O one-hot tem que acontecer dentro do Pipeline, não em build_features.
+
+    Enquanto era `pd.get_dummies` sobre a base inteira, o conjunto de colunas
+    era definido usando as linhas que virariam teste.
+    """
+    X, _, _ = dataset.carregar()
+    _, _, categoricas = dataset.colunas_por_tipo(X)
+
+    assert "bairro" in categoricas
+    assert X["bairro"].dtype == object or X["bairro"].dtype == "str"
+    assert not [c for c in X.columns if c.startswith("bairro_")]
+
+
+def test_encoder_e_ajustado_so_no_treino():
+    """Categoria que só existe no teste não pode virar coluna nova."""
+    from imoveis_jp.models import train
+
+    treino = pd.DataFrame({"bairro": ["manaira"] * 40 + ["bessa"] * 40})
+    teste = pd.DataFrame({"bairro": ["manaira", "bairro_que_nunca_vimos"]})
+
+    preparo = train.montar_preprocessador([], [], ["bairro"])
+    largura_treino = preparo.fit_transform(treino).shape[1]
+    transformado = preparo.transform(teste)
+
+    assert transformado.shape[1] == largura_treino  # sem coluna nova
+    assert transformado[1].sum() == 0.0  # a categoria inédita não vira 1 em nada
+
+
+def test_categoria_rara_e_agrupada_contando_so_o_treino():
+    # substitui o corte de bairros com <30 imóveis, que antes contava sobre a
+    # base inteira em build_features
+    from imoveis_jp.models import train
+
+    treino = pd.DataFrame({"bairro": ["comum"] * 100 + ["raro"] * 5})
+    preparo = train.montar_preprocessador([], [], ["bairro"])
+    preparo.fit(treino)
+
+    categorias = preparo.named_transformers_["cat"].infrequent_categories_[0]
+    assert "raro" in categorias
+    assert "comum" not in categorias

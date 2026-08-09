@@ -40,6 +40,9 @@ NUMERICAS = [
     "iptu",
 ]
 
+#: nominais que chegam como texto e sao codificadas dentro do Pipeline.
+CATEGORICAS = ["posicao_solar", "status_construcao", "tipo_unidade", "origem_anuncio", "bairro"]
+
 #: campos que identificam o imovel fisico, para agrupar anuncios repetidos.
 ASSINATURA = ["preco_venda", "area_util", "quartos", "banheiros", "garagens"]
 
@@ -85,10 +88,16 @@ def carregar() -> Tuple[pd.DataFrame, pd.Series, pd.Series]:
     return X, y, grupos
 
 
-def colunas_por_tipo(X: pd.DataFrame) -> Tuple[List[str], List[str]]:
+def colunas_por_tipo(X: pd.DataFrame) -> Tuple[List[str], List[str], List[str]]:
+    """Separa em contínuas, binárias já em 0/1 e nominais em texto.
+
+    As nominais chegam como texto de propósito: codificá-las em build_features
+    definiria o conjunto de colunas usando as linhas que virariam teste.
+    """
     numericas = [c for c in NUMERICAS if c in X.columns]
-    binarias = [c for c in X.columns if c not in numericas]
-    return numericas, binarias
+    categoricas = [c for c in CATEGORICAS if c in X.columns]
+    binarias = [c for c in X.columns if c not in numericas and c not in categoricas]
+    return numericas, binarias, categoricas
 
 
 def dividir(

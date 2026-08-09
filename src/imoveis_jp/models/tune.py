@@ -76,11 +76,13 @@ GRADE_RIDGE: Dict[str, List[Any]] = {
 }
 
 
-def montar_buscas(numericas: List[str], binarias: List[str]) -> Dict[str, GridSearchCV]:
+def montar_buscas(
+    numericas: List[str], binarias: List[str], categoricas: List[str]
+) -> Dict[str, GridSearchCV]:
     def com_preparo(regressor) -> Pipeline:
         return Pipeline(
             [
-                ("preparo", train.montar_preprocessador(numericas, binarias)),
+                ("preparo", train.montar_preprocessador(numericas, binarias, categoricas)),
                 ("regressor", regressor),
             ]
         )
@@ -117,8 +119,8 @@ def executar() -> pd.DataFrame:
 
     print(f"[Dados] treino={len(X_tr)} teste={len(X_te)} semente={dataset.SEMENTE}", flush=True)
 
-    numericas, binarias = dataset.colunas_por_tipo(X)
-    buscas = montar_buscas(numericas, binarias)
+    numericas, binarias, categoricas = dataset.colunas_por_tipo(X)
+    buscas = montar_buscas(numericas, binarias, categoricas)
 
     linhas = []
     melhores: Dict[str, Dict[str, Any]] = {}

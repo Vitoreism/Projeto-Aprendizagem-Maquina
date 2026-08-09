@@ -23,7 +23,7 @@ from sklearn.linear_model import Ridge
 from sklearn.metrics import mean_absolute_error, r2_score, root_mean_squared_error
 from sklearn.model_selection import GroupKFold, cross_val_score
 from sklearn.pipeline import Pipeline
-from sklearn.preprocessing import StandardScaler
+from sklearn.preprocessing import OneHotEncoder, StandardScaler
 
 from imoveis_jp import config
 from imoveis_jp.models import dataset
@@ -34,11 +34,26 @@ SAIDA_RELATORIO = config.INTERIM / "relatorio_treino.json"
 FOLDS = 5
 
 
-def montar_preprocessador(numericas: List[str], binarias: List[str]) -> ColumnTransformer:
-    """Imputacao e escala nas continuas; as binarias ja estao em 0/1.
+#: categoria com menos que isso vira 'infrequent' em vez de coluna propria.
+#: substitui o antigo corte de bairros raros e o filtro de dummies com menos de
+#: 1% -- ambos contavam sobre a base inteira, incluindo o teste. aqui a contagem
+#: acontece dentro do fold de treino.
+MINIMO_POR_CATEGORIA = 30
+
+
+def montar_preprocessador(
+    numericas: List[str], binarias: List[str], categoricas: List[str]
+) -> ColumnTransformer:
+    """Imputacao, escala e one-hot -- todos ajustados dentro do fold.
 
     add_indicator preserva a informacao de ausencia: com iptu ausente em 80% dos
     anuncios, o proprio silencio do anunciante e sinal, nao ruido a ser apagado.
+
+    O OneHotEncoder resolve de uma vez os dois vazamentos estruturais que a
+    auditoria apontou: o vocabulario sai so do treino, e min_frequency agrupa as
+    categorias raras contando so o treino. handle_unknown='infrequent_if_exist'
+    manda categoria inedita no teste para o mesmo balde das raras, em vez de
+    quebrar ou de virar uma coluna que o modelo nunca viu.
     """
     continuas = Pipeline(
         [
@@ -46,16 +61,31 @@ def montar_preprocessador(numericas: List[str], binarias: List[str]) -> ColumnTr
             ("escala", StandardScaler()),
         ]
     )
+    nominais = OneHotEncoder(
+        handle_unknown="infrequent_if_exist",
+        min_frequency=MINIMO_POR_CATEGORIA,
+        sparse_output=False,
+        dtype="float64",
+    )
     return ColumnTransformer(
-        [("num", continuas, numericas), ("bin", "passthrough", binarias)],
+        [
+            ("num", continuas, numericas),
+            ("bin", "passthrough", binarias),
+            ("cat", nominais, categoricas),
+        ],
         remainder="drop",
     )
 
 
-def montar_modelos(numericas: List[str], binarias: List[str]) -> Dict[str, Pipeline]:
+def montar_modelos(
+    numericas: List[str], binarias: List[str], categoricas: List[str]
+) -> Dict[str, Pipeline]:
     def com_preparo(regressor):
         return Pipeline(
-            [("preparo", montar_preprocessador(numericas, binarias)), ("regressor", regressor)]
+            [
+                ("preparo", montar_preprocessador(numericas, binarias, categoricas)),
+                ("regressor", regressor),
+            ]
         )
 
     return {
@@ -115,8 +145,13 @@ def executar() -> pd.DataFrame:
     if vazados:
         raise RuntimeError("split vazou: o mesmo imovel esta no treino e no teste")
 
-    numericas, binarias = dataset.colunas_por_tipo(X)
-    modelos = montar_modelos(numericas, binarias)
+    numericas, binarias, categoricas = dataset.colunas_por_tipo(X)
+    print(
+        f"[Features] {len(numericas)} continuas, {len(binarias)} binarias, "
+        f"{len(categoricas)} nominais (codificadas dentro do Pipeline).",
+        flush=True,
+    )
+    modelos = montar_modelos(numericas, binarias, categoricas)
 
     linhas = []
     for nome, modelo in modelos.items():
