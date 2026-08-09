@@ -126,9 +126,8 @@ acontece dentro de cada fold. Não custou acurácia; ganhou. Os números estão 
 
 Nesta matriz, portanto, **5 categóricas continuam 5 colunas de texto**. O corte
 espelhado de dummy quase-constante (frequência > 99%) não foi reimplantado, e o
-motivo está no comentário de `build_features.py`: o substituto natural dentro do
-`Pipeline` seria um `VarianceThreshold`, que é simétrico e cortaria junto tudo
-abaixo de 1% — devolvendo os 329 bairros para 38.
+motivo está medido no comentário de `build_features.py`: as três colunas em
+questão somam 0,04% do erro do modelo.
 
 ### 3.5 Duas features removidas por vazamento
 
@@ -150,7 +149,9 @@ desta própria base, bairro a bairro:
 
 **Correlação 0,996, erro relativo mediano 2,4%.** É uma agregação do alvo, e era a
 6ª feature mais forte do ranking (Spearman +0,504). O efeito de bairro segue
-coberto pela própria coluna `bairro`, que não toca no alvo.
+coberto pela própria coluna `bairro`, que não toca no alvo — e a importância por
+permutação mostra que ela é o atributo mais forte do modelo (+0,217 de MAE), ou
+seja, nada de essencial se perdeu com a remoção.
 
 **`anunciante_qtd_anuncios`** era `value_counts()` sobre a base inteira: a
 contagem de cada anunciante incluía os anúncios que cairiam no teste.

@@ -62,10 +62,22 @@ GRADE_BOOSTING: Dict[str, List[Any]] = {
     # 31 e o default; 127 e 255 entraram porque 63 estava na borda melhorando.
     "regressor__max_leaf_nodes": [31, 63, 127, 255],
     # preco de imovel tem cauda longa: folha maior impede a arvore de isolar
-    # um unico anuncio de alto padrao e decorar o valor dele.
-    "regressor__min_samples_leaf": [20, 50],
-    # o default e 0, ou seja, sem regularizacao L2.
-    "regressor__l2_regularization": [0.0, 1.0],
+    # um unico anuncio de alto padrao e decorar o valor dele. Era esse o
+    # raciocinio para a grade comecar em 20 -- e a segunda passada mostrou que
+    # ele estava errado. Com [20, 50] o otimo caiu na BORDA (20 -> 0,2204 de
+    # media contra 50 -> 0,2265), o mesmo defeito que max_leaf_nodes tinha na
+    # primeira passada. Sondando abaixo:
+    #
+    #    2 -> 0,2163    5 -> 0,2154    10 -> 0,2155    20 -> 0,2183    50 -> 0,2263
+    #
+    # o minimo e interior e fica em 5-10. A grade foi estendida para baixo.
+    "regressor__min_samples_leaf": [5, 10, 20, 50],
+    # EIXO MORTO, fixado no default. Na segunda passada a media entre
+    # configuracoes deu 0,2234 com l2=0 e 0,2235 com l2=1 -- diferenca na 4a
+    # casa. A "vitoria" do 1,0 aparecia so na melhor configuracao (0,2178
+    # contra 0,2183), 0,12 desvio entre folds: ruido de particao. Mantido na
+    # grade como valor unico para nao gastar metade das configuracoes com ele.
+    "regressor__l2_regularization": [0.0],
 }
 
 #: varredura logaritmica ampla: com 99 features padronizadas, o alpha util pode
