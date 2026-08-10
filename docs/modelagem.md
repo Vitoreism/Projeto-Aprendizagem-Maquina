@@ -359,6 +359,29 @@ numa amostra de dois casos — mas registra que "o ganho da busca é sempre
 otimista" é tendência, não lei, e que o teste continua sendo a única forma de
 saber qual dos dois aconteceu.
 
+### 8.7 Quarta passada: a primeira vez que a grade estava bem-posta
+
+O descarte dos repasses (§9.10) mudou a base de novo, então o eixo que já caiu na
+borda três vezes foi remedido antes de qualquer conclusão:
+
+```
+1 → 0,1998   2 → 0,1997   3 → 0,1989   5 → 0,1998
+8 → 0,2006  10 → 0,2022  15 → 0,2024  20 → 0,2033
+```
+
+Pela primeira vez a curva sobe dos **dois** lados: o mínimo está em 3, interior, e
+não encostado numa ponta. Não há grade para estender.
+
+**E não há motivo para mudar nada.** O valor em produção é 5, a 0,0009 do mínimo
+— e 1, 2, 3 e 5 cabem todos dentro desses mesmos 0,0009. É região plana, não
+diferença; o limiar de 0,005 do projeto está cinco vezes acima disso. Trocar 5
+por 3 seria perseguir a quarta casa decimal de uma partição específica.
+
+Fica a regra, que já valia três passadas atrás e agora tem contraexemplo: **quando
+a base muda, as bordas da grade precisam ser reavaliadas** — o ótimo se move com
+os dados. A novidade é que remedir também pode concluir *nada a fazer*, e essa é
+uma resposta tão boa quanto as outras.
+
 ---
 
 ## 9. Análise de resíduos e importância por permutação

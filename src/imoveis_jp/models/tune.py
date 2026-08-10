@@ -80,6 +80,16 @@ GRADE_BOOSTING: Dict[str, List[Any]] = {
     # a curva vira em 1, entao o minimo e interior. 2, 3 e 5 estao dentro de
     # 0,0007 -- regiao plana. 2 e 3 entraram na grade para que isso fique
     # reproduzivel, e nao so num comentario.
+    #
+    # o descarte dos repasses mudou a base outra vez, e o eixo foi remedido:
+    #
+    #    1 -> 0,1998   2 -> 0,1997   3 -> 0,1989   5 -> 0,1998
+    #    8 -> 0,2006  10 -> 0,2022  15 -> 0,2024  20 -> 0,2033
+    #
+    # pela primeira vez a curva sobe dos DOIS lados -- minimo em 3, interior,
+    # nada a estender. E nada a mudar: o 5 em producao esta a 0,0009 do minimo,
+    # e 1, 2, 3 e 5 cabem todos dentro desses 0,0009. Regiao plana, nao
+    # diferenca; o limiar do projeto (0,005) esta cinco vezes acima disso.
     "regressor__min_samples_leaf": [2, 3, 5, 10, 20, 50],
     # EIXO MORTO, fixado no default. Na segunda passada a media entre
     # configuracoes deu 0,2234 com l2=0 e 0,2235 com l2=1 -- diferenca na 4a
