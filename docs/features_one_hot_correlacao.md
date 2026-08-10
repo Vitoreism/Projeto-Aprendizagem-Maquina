@@ -111,7 +111,7 @@ Duas ressalvas importantes:
 | Coluna | Tratamento |
 |---|---|
 | `posicao_solar`, `status_construcao`, `tipo_unidade`, `origem_anuncio` | normalizadas como **texto** |
-| `bairro` | canonizado do endereço via `extrair_bairro` → **58 bairros oficiais** + `nao_informado` |
+| `bairro` | canonizado do endereço via `extrair_bairro` → **65 lugares curados** + `nao_informado` |
 | `anunciante` (442 níveis) | **descartado** — ver §3.5 |
 
 A versão anterior desta etapa fazia `pd.get_dummies` aqui, com dois cortes de
@@ -127,7 +127,8 @@ acontece dentro de cada fold. Não custou acurácia; ganhou. Os números estão 
 Os 329 níveis de bairro que existiam aqui eram, em boa parte, artefato de
 extração: 9,8% dos anúncios estavam em categorias inventadas por um fallback que
 pegava a primeira palavra do endereço. Depois da canonização contra a lista dos
-64 bairros oficiais de João Pessoa, restam **58 com anúncio** e 0,47% sem bairro.
+64 bairros oficiais de João Pessoa (mais 7 localidades reconhecidas), restam
+**65 com anúncio** e 0,08% sem bairro.
 Ver [§9.7 de modelagem.md](modelagem.md).
 
 Nesta matriz, portanto, **5 categóricas continuam 5 colunas de texto**. O corte

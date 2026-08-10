@@ -124,9 +124,9 @@ estatística atravessa a fronteira treino/validação. O teste é tocado uma ún
 
 | Modelo | CV MAE (log) | Teste MAE | Erro % mediano | R² (log) |
 |---|---|---|---|---|
-| Gradient Boosting ajustado | 0,2085 | R$ 164.579 | 15,4% | 0,886 |
-| Gradient Boosting (padrão) | 0,2176 | R$ 172.264 | 16,9% | 0,879 |
-| Ridge | 0,2672 | R$ 252.022 | 21,2% | 0,820 |
+| Gradient Boosting ajustado | 0,2084 | R$ 165.714 | 15,4% | 0,884 |
+| Gradient Boosting (padrão) | 0,2169 | R$ 171.596 | 16,8% | 0,881 |
+| Ridge | 0,2673 | R$ 250.871 | 21,1% | 0,821 |
 | Baseline (mediana) | 0,6381 | R$ 427.716 | 42,2% | −0,004 |
 
 Metodologia, decisões e limitações: [docs/modelagem.md](docs/modelagem.md).
@@ -136,10 +136,10 @@ Metodologia, decisões e limitações: [docs/modelagem.md](docs/modelagem.md).
 `analysis` mede, **no conjunto de teste**, onde o modelo erra e do que ele
 depende. Três resultados:
 
-- **O modelo puxa tudo para o meio.** O viés vai de +7,6% no quintil mais barato
-  a −14,9% no mais caro, trocando de sinal monotonicamente. O topo é a pior faixa
-  (19,7% de erro mediano) contra 13,5% no centro.
-- **`bairro` e `area_util` sozinhos valem 0,44 dos 0,64 de importância total.**
+- **O modelo puxa tudo para o meio.** O viés vai de +7,7% no quintil mais barato
+  a −15,4% no mais caro, trocando de sinal monotonicamente. O topo é a pior faixa
+  (19,7% de erro mediano) contra 13,9% no centro.
+- **`bairro` e `area_util` sozinhos valem 0,44 dos 0,63 de importância total.**
   28 dos 75 atributos têm importância indistinguível de zero.
 - **Correlação não é importância.** `com_lavabo` é a 11ª maior correlação com o
   preço e vale zero para o modelo; `bairro_bessa` tem correlação 0,012 e é uma
@@ -148,7 +148,7 @@ depende. Três resultados:
   Ridge.
 
 A análise também expôs dois problemas de dado. Os 19 anúncios abaixo de R$ 50 mil
-erram +83% na mediana porque não são preços de venda (R$ 603/m² contra uma
+erram +87% na mediana porque não são preços de venda (R$ 603/m² contra uma
 mediana de R$ 9.045/m²) — registrado, ainda não tratado. O outro foi corrigido:
 ver abaixo. Detalhes: §9 de [docs/modelagem.md](docs/modelagem.md).
 
@@ -164,17 +164,20 @@ não-canônicos.
 A correção lê a estrutura do endereço — que difere entre os dois portais — e casa
 contra os **64 bairros oficiais** de João Pessoa por conjunto de tokens, com o
 nome mais específico vencendo. Nunca inventa: o que não casa vira
-`nao_informado`, e sobraram 73 anúncios (0,47%) — 8 sem endereço, 5 fora do
-município e 60 em localidades que não são bairros oficiais (Jardim Luna, Novo
-Milênio, Colinas do Sul…), que ficam sem bairro até alguém de conhecimento local
-confirmar a qual bairro pertencem.
+`nao_informado`, e sobraram 13 anúncios (0,08%) — 8 sem endereço e 5 fora do
+município.
 
-**329 valores distintos → 59.** Como `bairro` entra na chave de deduplicação, a
+Sete localidades que não constam da lista oficial (Jardim Luna, Novo Milênio,
+Colinas do Sul…) entraram numa lista à parte, confirmadas por conhecimento local
+e sustentadas pelos dados: Jardim Luna tem CV de preço/m² de 0,23, mais
+homogêneo que o bairro oficial mediano (0,35).
+
+**329 valores distintos → 66.** Como `bairro` entra na chave de deduplicação, a
 correção também revelou 579 duplicatas entre portais que antes escapavam: a base
 cai de 16.162 para 15.583 linhas, sem perda de imóvel.
 
 Medido em A/B sobre as mesmas linhas e folds: CV **0,2144 → 0,2097**, com os 5
-folds concordando; a lista oficial levou a 0,2085. E a matriz depois do one-hot
+folds concordando; a lista oficial levou a 0,2084. E a matriz depois do one-hot
 cai de 349 para 131 colunas, com o modelo melhor.
 
 Por que a extração via LLM do zap continua pendente — e por que completá-la

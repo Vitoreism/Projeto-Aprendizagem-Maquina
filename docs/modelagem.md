@@ -115,9 +115,9 @@ de modelo.
 
 | Modelo | CV MAE (log) | Teste MAE | Erro % mediano | R² (log) |
 |---|---|---|---|---|
-| **Gradient Boosting ajustado** | **0,2085 ± 0,0036** | **R$ 164.579** | **15,4%** | **0,886** |
-| Gradient Boosting (padrão) | 0,2176 ± 0,0031 | R$ 172.264 | 16,9% | 0,879 |
-| Ridge | 0,2672 ± 0,0024 | R$ 252.022 | 21,2% | 0,820 |
+| **Gradient Boosting ajustado** | **0,2084 ± 0,0041** | **R$ 165.714** | **15,4%** | **0,884** |
+| Gradient Boosting (padrão) | 0,2169 ± 0,0033 | R$ 171.596 | 16,8% | 0,881 |
+| Ridge | 0,2673 ± 0,0020 | R$ 250.871 | 21,1% | 0,821 |
 | Baseline (mediana) | 0,6381 ± 0,0053 | R$ 427.716 | 42,2% | −0,004 |
 
 O baseline existe como piso de sanidade: prever sempre a mediana. Seu R² de
@@ -305,7 +305,7 @@ atributo**. É leitura, não decisão.
 ### 9.1 Os resíduos estão centrados
 
 ```
-média = −0,0028   mediana = −0,0008   desvio = 0,2864   assimetria = +0,08
+média = −0,0022   mediana = −0,0019   desvio = 0,2882   assimetria = +0,08
 ```
 
 Em log, a mediana do resíduo é praticamente zero: o modelo não tem viés global.
@@ -316,11 +316,11 @@ reais — a transformação log fez praticamente todo o trabalho.
 
 | Faixa de preço | n | Preço mediano | Viés | Erro mediano | MAE |
 |---|---|---|---|---|---|
-| Q1 (mais barato) | 618 | R$ 180 mil | +7,6% | 17,3% | R$ 51 mil |
-| Q2 | 627 | R$ 406 mil | +7,7% | **13,5%** | R$ 80 mil |
-| Q3 | 612 | R$ 589 mil | +1,7% | 13,5% | R$ 105 mil |
-| Q4 | 620 | R$ 804 mil | −4,2% | 13,7% | R$ 144 mil |
-| Q5 (mais caro) | 609 | R$ 1,4 mi | **−14,9%** | **19,7%** | R$ 448 mil |
+| Q1 (mais barato) | 618 | R$ 180 mil | +7,7% | 17,3% | R$ 52 mil |
+| Q2 | 627 | R$ 406 mil | +8,4% | 14,0% | R$ 81 mil |
+| Q3 | 612 | R$ 589 mil | +1,8% | **13,9%** | R$ 106 mil |
+| Q4 | 620 | R$ 804 mil | −3,9% | 14,3% | R$ 144 mil |
+| Q5 (mais caro) | 609 | R$ 1,4 mi | **−15,4%** | **19,7%** | R$ 451 mil |
 
 O viés troca de sinal monotonicamente do Q1 ao Q5: **o modelo puxa tudo para o
 meio.** É a regressão à média clássica de um estimador que minimiza erro — ele
@@ -338,12 +338,12 @@ pontual de um imóvel de alto padrão. Nesse segmento ela é sistematicamente
 conservadora, em cerca de 15%.
 
 Eu previa que o erro se concentraria no alto padrão, onde os dados são esparsos.
-Certo em parte. O Q5 é de longe o pior (19,7% contra 13,5% no centro). O Q1 era
+Certo em parte. O Q5 é de longe o pior (19,7% contra 13,9% no centro). O Q1 era
 quase tão ruim quanto — mas deixou de ser depois que os bairros foram
 canonizados (§9.7): caiu de 20,0% para 17,3%, porque boa parte do erro ali não
 era escassez de dado, era bairro errado.
 
-O erro em reais, esse sim, cresce monotonicamente: R$ 51 mil no Q1 contra R$ 448
+O erro em reais, esse sim, cresce monotonicamente: R$ 52 mil no Q1 contra R$ 451
 mil no Q5. Para triagem em massa a leitura relevante é a percentual; para decidir
 sobre um imóvel específico, a em reais.
 
@@ -355,23 +355,23 @@ construção). Unidade: quanto o MAE em log piora ao embaralhar a coluna.
 
 | Atributo | Importância | Desvio |
 |---|---|---|
-| `bairro` | **+0,2518** | 0,0040 |
-| `area_util` | **+0,1845** | 0,0055 |
-| `garagens` | +0,0651 | 0,0032 |
-| `suites` | +0,0268 | 0,0026 |
-| `origem_anuncio` | +0,0204 | 0,0015 |
-| `quartos` | +0,0149 | 0,0005 |
-| `condominio` | +0,0143 | 0,0010 |
-| `area_total` | +0,0092 | 0,0007 |
-| `banheiros` | +0,0081 | 0,0005 |
-| `com_varanda_gourmet` | +0,0053 | 0,0006 |
+| `bairro` | **+0,2527** | 0,0042 |
+| `area_util` | **+0,1857** | 0,0054 |
+| `garagens` | +0,0653 | 0,0029 |
+| `suites` | +0,0255 | 0,0025 |
+| `origem_anuncio` | +0,0206 | 0,0016 |
+| `condominio` | +0,0131 | 0,0010 |
+| `quartos` | +0,0131 | 0,0007 |
+| `area_total` | +0,0085 | 0,0005 |
+| `banheiros` | +0,0080 | 0,0006 |
+| `com_varanda_gourmet` | +0,0051 | 0,0006 |
 
-Localização e tamanho respondem por **0,44 dos 0,64** de importância total.
-Embaralhar `bairro` sozinho piora o MAE em 0,2518, mais do que o MAE final
-inteiro (0,2074) — sem bairro o modelo é pior que inútil.
+Localização e tamanho respondem por **0,44 dos 0,63** de importância total.
+Embaralhar `bairro` sozinho piora o MAE em 0,2527, mais do que o MAE final
+inteiro (0,2089) — sem bairro o modelo é pior que inútil.
 
 A distância entre os dois cresceu depois da canonização (§9.7): `bairro` subiu
-de +0,2226 para +0,2518 e `area_util` caiu de +0,2001 para +0,1845. Faz sentido
+de +0,2226 para +0,2527 e `area_util` caiu de +0,2001 para +0,1857. Faz sentido
 — parte do sinal de localização estava perdida em rótulo errado, e o modelo a
 compensava pela área.
 
@@ -380,7 +380,7 @@ comodidades. Isso não significa que comodidade não importe: significa que, dad
 o bairro e a área, ela não acrescenta.
 
 Nota de honestidade sobre `origem_anuncio`: está na matriz como controle do
-artefato de portal, e a permutação confirma que o modelo a usa (+0,0204). Isso é
+artefato de portal, e a permutação confirma que o modelo a usa (+0,0206). Isso é
 esperado e é justamente por isso que ela fica — sem a coluna, a diferença entre
 portais seria absorvida como se fosse diferença entre imóveis.
 
@@ -393,12 +393,12 @@ está o que só um dos métodos enxerga.
 
 | Feature | \|Spearman\| | Importância | Salto de posto |
 |---|---|---|---|
-| `com_interfone` | 0,179 | +0,0000 | −94 |
-| `com_closet` | 0,178 | −0,0000 | −91 |
-| `com_churrasqueira` | 0,167 | −0,0001 | −86 |
+| `com_closet` | 0,178 | +0,0000 | −94 |
+| `com_portaria_seguranca_24h` | 0,166 | +0,0000 | −88 |
+| `com_deposito` | 0,123 | −0,0000 | −70 |
 
-`com_interfone` está entre as 10 maiores correlações com o preço e vale **zero**
-para o modelo. Não é contradição: interfone aparece em prédio novo de bairro
+`com_closet` está entre as 10 maiores correlações com o preço e vale **zero**
+para o modelo. Não é contradição: closet aparece em apartamento grande de bairro
 caro. Dado `area_util` e `bairro`, ele não acrescenta nada — a correlação estava
 medindo o efeito de outra variável através dele.
 
@@ -406,8 +406,8 @@ medindo o efeito de outra variável através dele.
 
 | Feature | \|Spearman\| | Importância | Salto de posto |
 |---|---|---|---|
-| `bairro_bessa` | 0,010 | +0,0110 | +98 |
-| `bairro_aeroclube` | 0,038 | +0,0028 | +65 |
+| `bairro_bessa` | 0,010 | +0,0095 | +98 |
+| `com_predio_pastilhado` | 0,028 | +0,0015 | +73 |
 
 `bairro_bessa` tem correlação **0,010** com o preço — praticamente nada — e ainda
 assim é uma das dummies mais úteis do modelo. O Bessa tem preço mediano de
@@ -420,12 +420,12 @@ bivariada consegue ver isso.
 
 ### 9.5 O que o resíduo revelou sobre os dados
 
-Os 19 anúncios do teste abaixo de R$ 50 mil têm erro mediano de **+83%** — o
+Os 19 anúncios do teste abaixo de R$ 50 mil têm erro mediano de **+87%** — o
 modelo prevê consistentemente muito acima. Não é falha do modelo: R$ 35 mil por
 58 m² dá R$ 603/m², contra uma mediana de **R$ 9.045/m²** na base. São entradas
 de financiamento, permutas ou erro de digitação anunciados como preço de venda.
 
-Dos 43 anúncios com erro acima de 100%, **28% têm preço/m² abaixo de R$ 1.500**.
+Dos 45 anúncios com erro acima de 100%, **29% têm preço/m² abaixo de R$ 1.500**.
 
 O piso de plausibilidade em `build_features` está em R$ 20.000, permissivo
 demais. Um piso por **preço/m²** — e não por preço absoluto — pegaria esses casos
@@ -435,11 +435,11 @@ nesta etapa.
 
 Dois outros segmentos, para fechar:
 
-- **Portal.** `zapimoveis` 15,7%, `chaves_na_mao` 15,8%, anúncios presentes nos
-  dois 14,2%. O imóvel que aparece nos dois portais é mais fácil de prever, o que
+- **Portal.** `zapimoveis` 15,6%, `chaves_na_mao` 16,0%, anúncios presentes nos
+  dois 14,7%. O imóvel que aparece nos dois portais é mais fácil de prever, o que
   faz sentido: são os anúncios com ficha mais completa.
 - **Campos ausentes.** A correlação de Spearman entre número de campos numéricos
-  em branco e erro absoluto é **0,032**. Praticamente nula — a imputação com
+  em branco e erro absoluto é **0,033**. Praticamente nula — a imputação com
   indicadora está segurando bem a ausência, e o erro não vem de lá.
 
 ### 9.7 A canonização dos bairros
@@ -507,18 +507,44 @@ Duas decisões que valem justificativa:
   de um token só, e sozinho ele **perderia** de `{cabo, branco}`, de dois — o bug
   voltaria. Por isso `"altiplano cabo branco"` está no mapa de apelidos e entra
   na ordenação por especificidade com três tokens, vencendo os dois.
-- **Nunca inventa.** O que não casa vira `nao_informado`. Sobraram **73 anúncios**
-  (0,47%), de três tipos: 8 sem endereço utilizável; 5 fora do município (praias
-  de Camboinha e Carapibus); e 60 em localidades reais que **não são bairros
-  oficiais** — Jardim Luna (43), Novo Milênio (7), Colinas do Sul (6), Conjunto
-  Esplanada, Cidade Verde, Jardim Planalto, Jardim das Acácias.
+- **Nunca inventa.** O que não casa vira `nao_informado`. Sobraram **13 anúncios**
+  (0,08%): 8 sem endereço utilizável e 5 fora do município (praias de Camboinha e
+  Carapibus, que são Cabedelo e Conde).
 
-  Esses 60 poderiam ser mapeados para o bairro que os contém, mas isso exige
-  conhecimento local que eu não tenho como verificar — e chutar o bairro mais
-  próximo repetiria, com outra roupa, exatamente o defeito que esta correção
-  eliminou. Ficam em `nao_informado` até alguém confirmar.
+#### Sete localidades que não estão entre as 64
 
-Resultado: **329 valores distintos → 59** (58 bairros oficiais com anúncio, mais
+Jardim Luna (43 anúncios), Novo Milênio (7), Colinas do Sul (6), Conjunto
+Esplanada, Cidade Verde, Jardim Planalto e Jardim das Acácias aparecem nos
+anúncios e não constam da lista oficial. A primeira versão desta correção
+mandou as sete para `nao_informado`, por não ter como verificá-las.
+
+Confirmação de quem conhece a cidade: funcionam como bairro. E os dados
+sustentam — a mesma medida de dispersão que expôs os baldes falsos:
+
+| | n | Mediana R$/m² | IQR | CV |
+|---|---|---|---|---|
+| **Jardim Luna** | 41 | **10.132** | 2.649 | **0,23** |
+| Novo Milênio | 5 | 3.100 | 2.629 | 0,72 |
+| Colinas do Sul | 6 | 2.564 | 1.320 | 0,49 |
+| *bairro oficial típico* | — | 6.082 | 1.964 | 0,35 |
+| *`avenida`, o balde antigo* | 29 | 4.091 | **6.898** | — |
+
+Jardim Luna é **mais homogêneo que o bairro oficial mediano** (CV 0,23 contra
+0,35) e nitidamente mais caro que a cidade. É uma área coerente, nada parecida
+com o balde `avenida`, que misturava imóveis de toda a cidade. Mandá-la para
+`nao_informado` descartava sinal bom, e ainda a misturava com anúncios que
+simplesmente não têm endereço.
+
+As sete entraram numa lista à parte, `LOCALIDADES_RECONHECIDAS`. A garantia de
+"nunca inventa" continua de pé: as duas listas são curadas e fechadas — o que o
+fallback antigo fazia era criar categoria a partir de qualquer palavra solta.
+
+**Efeito no modelo: nenhum.** CV 0,2085 → 0,2084, dentro do ruído. São 60
+anúncios em 15.583, e o `min_frequency=30` do `Pipeline` só deixa Jardim Luna
+virar coluna própria; as outras seis viram categoria rara dentro do fold. A
+justificativa aqui é de correção, não de métrica — igual ao resto desta seção.
+
+Resultado: **329 valores distintos → 66** (65 lugares com anúncio, mais
 `nao_informado`). Nenhum valor fora da lista, e um teste varre a base inteira a
 cada execução para garantir isso.
 
@@ -566,11 +592,11 @@ MAE não mexesse.
 | | antes | depois |
 |---|---|---|
 | Colunas após o one-hot | 349 | **131** |
-| Importância de `bairro` | +0,2226 | **+0,2518** |
+| Importância de `bairro` | +0,2226 | **+0,2527** |
 | Assimetria do resíduo | +0,42 | **+0,08** |
 | Erro mediano no Q1 | 20,0% | **17,3%** |
 | Erro mediano no teste | 16,2% | **15,4%** |
-| R² (log) no teste | 0,868 | **0,886** |
+| R² (log) no teste | 0,868 | **0,884** |
 
 A queda de 349 para 131 colunas com o modelo *melhorando* é o argumento da §10 do
 material da disciplina — menos atributos, mesmo resultado ou melhor, com menor
@@ -587,7 +613,7 @@ Eu previa que `cabo_branco` melhoraria, "porque hoje são dois bairros somados".
 Não melhorou — foi de 16,4% para **17,0%** de erro mediano.
 
 O motivo é instrutivo. Depois de puro, Cabo Branco tem IQR de preço/m² de **R$
-7.882**, o maior de todos os bairros (o típico é R$ 1.528). É a orla de alto
+7.882**, o maior de todos os bairros (o típico é R$ 1.446). É a orla de alto
 padrão: mesmo bairro, imóveis de valores radicalmente diferentes. Misturar o
 Altiplano, mais homogêneo, *diluía* a dificuldade e fazia o número parecer melhor.
 

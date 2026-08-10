@@ -100,15 +100,28 @@ def test_apelido_designa_o_mesmo_bairro_oficial():
     assert dd.casar_bairro("Jardim 13 de Maio") == "treze_de_maio"
 
 
-def test_localidade_que_nao_e_bairro_oficial_nao_vira_categoria():
-    """Loteamento, conjunto e praia de outro municipio nao sao bairro.
-
-    Chutar o bairro mais proximo repetiria, com outra roupa, o defeito que esta
-    funcao corrige. Sem confirmacao, 'nao_informado'.
-    """
+def test_praia_de_outro_municipio_nao_vira_bairro():
+    """Chutar o bairro mais proximo repetiria o defeito com outra roupa."""
     assert dd.casar_bairro("Praia de Camboinha") is None   # Cabedelo
     assert dd.casar_bairro("Praia de Carapibus") is None   # Conde
-    assert dd.casar_bairro("Jardim Luna") is None
+    assert dd.casar_bairro("Praia de Intermares") is None  # Cabedelo
+
+
+def test_localidade_reconhecida_e_categoria_propria():
+    """Nao esta entre os 64 oficiais, mas funciona como bairro no mercado.
+
+    Jardim Luna tem 41 anuncios com CV de preco/m2 de 0,23 -- mais homogeneo
+    que o bairro oficial mediano (0,35) e bem mais caro que a cidade
+    (R$ 10.132/m2 contra R$ 6.082). Manda-lo para 'nao_informado' descartaria
+    sinal bom.
+    """
+    assert dd.casar_bairro("Jardim Luna") == "jardim_luna"
+    assert dd.casar_bairro("Novo Milênio") == "novo_milenio"
+    assert dd.casar_bairro("Colinas do Sul") == "colinas_do_sul"
+
+    # a lista continua fechada e curada: nao virou fallback
+    assert dd.casar_bairro("Jardim Qualquer") is None
+    assert dd.casar_bairro("Conjunto Inexistente") is None
 
 
 def test_apelido_aponta_para_bairro_existente():
@@ -117,7 +130,9 @@ def test_apelido_aponta_para_bairro_existente():
 
 
 def test_lista_oficial_tem_os_64_bairros():
-    assert len(dd.CANONICOS) == 64
+    assert len(dd.BAIRROS_OFICIAIS) == 64
+    # os oficiais mais as localidades reconhecidas
+    assert len(dd.CANONICOS) == 64 + len(dd.LOCALIDADES_RECONHECIDAS)
 
 
 def test_numero_no_campo_nao_atrapalha():

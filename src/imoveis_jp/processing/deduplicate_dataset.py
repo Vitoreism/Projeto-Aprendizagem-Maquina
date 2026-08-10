@@ -57,6 +57,30 @@ BAIRROS_OFICIAIS = (
     "Treze de Maio", "Trincheiras", "Valentina de Figueiredo", "Varadouro", "Varjao",
 )
 
+#: localidades que nao estao entre os 64 oficiais, mas funcionam como bairro no
+#: mercado e aparecem nos anuncios. entram por confirmacao de quem conhece a
+#: cidade, e a evidencia nos dados sustenta: preco/m2 dentro de cada uma e tao
+#: coerente quanto num bairro oficial, nada parecido com os baldes que o
+#: fallback antigo criava.
+#:
+#:   Jardim Luna    n=41  mediana R$ 10.132/m2  IQR R$ 2.649  CV 0,23
+#:   bairro oficial tipico     R$  6.082/m2  IQR R$ 1.964  CV 0,35
+#:   'avenida' (balde antigo)                IQR R$ 6.898
+#:
+#: Jardim Luna e ate mais homogeneo que o bairro oficial mediano, e claramente
+#: mais caro que a cidade -- manda-lo para 'nao_informado' descartava sinal.
+#: as demais tem amostra pequena demais para medir; ficam pelo mesmo criterio
+#: de serem lugar reconhecido, e o min_frequency=30 do Pipeline se encarrega de
+#: agrupa-las como categoria rara dentro do fold.
+#:
+#: a garantia de "nunca inventa" continua de pe: esta lista e curada e fechada,
+#: como a dos oficiais. o que o fallback antigo fazia era criar categoria a
+#: partir de qualquer palavra do endereco.
+LOCALIDADES_RECONHECIDAS = (
+    "Jardim Luna", "Novo Milenio", "Colinas do Sul", "Conjunto Esplanada",
+    "Cidade Verde", "Jardim Planalto", "Jardim das Acacias",
+)
+
 #: nomes que os anuncios usam e que designam um bairro oficial sob outro rotulo.
 #: cada linha aqui e uma afirmacao verificavel sobre o mesmo lugar, nao um chute
 #: de vizinhanca -- localidade que eu nao consiga confirmar vai para
@@ -114,14 +138,16 @@ def _slug(nome: str) -> str:
 
 
 #: os unicos valores que extrair_bairro pode devolver, alem de 'nao_informado'.
-CANONICOS = frozenset(_slug(n) for n in BAIRROS_OFICIAIS)
+CANONICOS = frozenset(_slug(n) for n in BAIRROS_OFICIAIS + LOCALIDADES_RECONHECIDAS)
 
 _desconhecidos = sorted(set(ALIASES_BAIRRO.values()) - CANONICOS)
 if _desconhecidos:  # erro de digitacao no mapa de apelidos, nao dado ruim
     raise ValueError(f"ALIASES_BAIRRO aponta para bairro inexistente: {_desconhecidos}")
 
 #: indice por conjunto de tokens, com apelidos e nomes oficiais no mesmo espaco.
-_POR_TOKENS: Dict[frozenset, str] = {_tokens(n): _slug(n) for n in BAIRROS_OFICIAIS}
+_POR_TOKENS: Dict[frozenset, str] = {
+    _tokens(n): _slug(n) for n in BAIRROS_OFICIAIS + LOCALIDADES_RECONHECIDAS
+}
 _POR_TOKENS.update({_tokens(a): c for a, c in ALIASES_BAIRRO.items()})
 
 #: do mais especifico para o menos. essa ordenacao E a correcao do bug antigo:
