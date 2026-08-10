@@ -93,6 +93,51 @@ LIMITES_PLAUSIBILIDADE = {
     "iptu": (0.0, 100_000.0),
 }
 
+#: piso de preco por m2, em reais. Abaixo dele o valor anunciado nao e o preco
+#: do imovel: e o AGIO de um repasse de financiamento -- o comprador paga esse
+#: valor pelas chaves e assume as parcelas restantes. Sao dois produtos
+#: diferentes com a mesma etiqueta, e misturar os dois ensina o modelo que um
+#: apartamento de 2 quartos no Gramame vale R$ 22.000.
+#:
+#: POR QUE 1.000 E NAO O DOBRO. A distribuicao global de preco/m2 nao tem vale:
+#: e continua de R$ 250 a R$ 4.000, entao o corte e escolha, nao descoberta.
+#: Ele foi calibrado contra um sinal independente -- a palavra 'repasse' ou
+#: 'agio' no texto do anuncio, que 177 anuncios declaram:
+#:
+#:    piso   descartados   declaram repasse   precisao
+#:     500        31              25            81%
+#:    1000       111              84            76%
+#:    1500       210             104            50%
+#:    2000       440             111            25%
+#:
+#: A precisao desaba entre 1.000 e 1.500 porque ali entra outra populacao, que
+#: e legitima: 311 anuncios de venda direta/leilao da Caixa, com preco/m2
+#: concentrado entre R$ 1.164 e R$ 1.899 (p05 a p75). Sao vendas reais, num
+#: regime de preco deprimido -- nao erro. O piso fica ABAIXO do p05 desse grupo
+#: de proposito. Custo assumido: 21 anuncios de venda direta caem junto (19%
+#: dos descartes), preco de nao inventar uma regra que dependa do texto de
+#: marketing para decidir o que e dado valido.
+#:
+#: O texto calibrou o piso; nao filtra nada. Usar 'repasse' como filtro
+#: descartaria anuncio normal que so cita a palavra no rodape da imobiliaria --
+#: 78 dos 177 tem preco/m2 acima de 1.250 e sao anuncios comuns.
+PISO_PRECO_M2 = 1_000.0
+
+#: acima desta area, um preco/m2 baixo acusa a AREA, nao o preco: e o separador
+#: decimal perdido no scrap ('137,20 m2' virando 1372). Aqui existe o vale que
+#: falta na distribuicao global -- entre os 85 anuncios com mais de 400 m2, o
+#: preco/m2 pula de R$ 1.666 para R$ 3.288 sem nada no meio. Qualquer limiar
+#: entre 1.700 e 3.200 separa os mesmos 9 anuncios, entao o numero nao e
+#: arbitrario.
+#:
+#: Os dois lados do vale sao reconheciveis: abaixo dele estao 1.280 m2 de 3
+#: quartos em Tambau por R$ 550.000 e 988 m2 cujo proprio titulo diz '98 m2';
+#: acima estao coberturas de 5 quartos no Cabo Branco e no Miramar por R$ 10 a
+#: 19 milhoes, que sao reais. Um teto absoluto de area mataria justamente as
+#: reais -- por isso a regra e o par (area, preco/m2), nao a area sozinha.
+AREA_SUSPEITA_M2 = 400.0
+PRECO_M2_DE_AREA_QUEBRADA = 2_000.0
+
 #: colunas numericas corrompidas pela colisao de nomes com 'comodidade_<x>'
 #: na fusao html+llm; sao reconstruidas a partir do json bruto.
 COLUNAS_REPARAVEIS = ["suites", "banheiros", "quartos", "garagens", "vagas", "area_util"]
@@ -279,6 +324,84 @@ def aplicar_limites(df: pd.DataFrame) -> Tuple[pd.DataFrame, Dict[str, int]]:
     return df, fora_da_faixa
 
 
+def _preco_por_m2(df: pd.DataFrame) -> pd.Series:
+    """Preco/m2 onde os dois campos existem; NaN no resto (nao e erro, e silencio)."""
+    valido = (
+        df["preco_venda"].notna()
+        & (df["preco_venda"] > 0)
+        & df["area_util"].notna()
+        & (df["area_util"] > 0)
+    )
+    return (df["preco_venda"] / df["area_util"]).where(valido)
+
+
+def corrigir_area_implausivel(df: pd.DataFrame) -> Tuple[pd.DataFrame, int]:
+    """Anula a area quando o par (area, preco/m2) acusa separador decimal perdido.
+
+    Anula a AREA e nao a linha: o preco desses anuncios esta certo. Um
+    apartamento de R$ 1.019.334 no Jardim Oceania e um dado bom; so a area de
+    984 m2 e que e 98,4. Descartar a linha jogaria fora o preco junto.
+
+    Roda ANTES do piso de preco/m2 de proposito: sem a area, esses anuncios
+    deixam de ter preco/m2 e nao sao mais candidatos ao descarte seguinte --
+    que e exatamente o que se quer, porque o problema deles nao era o preco.
+    """
+    if "area_util" not in df.columns or "preco_venda" not in df.columns:
+        return df, 0
+
+    pm = _preco_por_m2(df)
+    quebrada = (df["area_util"] > AREA_SUSPEITA_M2) & (pm < PRECO_M2_DE_AREA_QUEBRADA)
+    quantidade = int(quebrada.sum())
+
+    if quantidade:
+        df.loc[quebrada, "area_util"] = pd.NA
+        print(
+            f"[Area] {quantidade} areas anuladas por incoerencia com o preco "
+            f"(> {AREA_SUSPEITA_M2:.0f} m2 e < R$ {PRECO_M2_DE_AREA_QUEBRADA:,.0f}/m2).",
+            flush=True,
+        )
+
+    return df, quantidade
+
+
+def remover_precos_que_nao_sao_venda(df: pd.DataFrame) -> Tuple[pd.DataFrame, Dict[str, Any]]:
+    """Descarta anuncios cujo valor e agio de repasse, nao preco do imovel.
+
+    Aqui a linha inteira sai, e nao so o campo: o alvo do modelo e o preco de
+    venda, e esses anuncios simplesmente nao tem um. Anular o preco daria no
+    mesmo -- dataset.carregar() ja filtra alvo ausente -- mas descartar deixa a
+    intencao explicita no relatorio.
+
+    Ver PISO_PRECO_M2 para o porque do valor e para o custo assumido.
+    """
+    if "area_util" not in df.columns or "preco_venda" not in df.columns:
+        return df, {"descartados": 0}
+
+    pm = _preco_por_m2(df)
+    # anuncio sem area nao entra: NaN < piso e False, e nao ha o que julgar.
+    agio = pm < PISO_PRECO_M2
+    quantidade = int(agio.sum())
+
+    info = {
+        "descartados": quantidade,
+        "piso_preco_m2": PISO_PRECO_M2,
+        "preco_mediano_descartado": (
+            float(df.loc[agio, "preco_venda"].median()) if quantidade else None
+        ),
+    }
+
+    if quantidade:
+        df = df.loc[~agio].copy()
+        print(
+            f"[Repasse] {quantidade} anuncios descartados: preco/m2 abaixo de "
+            f"R$ {PISO_PRECO_M2:,.0f} e agio, nao preco de venda "
+            f"(mediana do valor anunciado: R$ {info['preco_mediano_descartado']:,.0f}).",
+            flush=True,
+        )
+
+    return df, info
+
+
 def consolidar_binarias(df: pd.DataFrame) -> Tuple[pd.DataFrame, Dict[str, Any]]:
     """Funde as binarias equivalentes numa coluna canonica por OR logico.
 
@@ -404,6 +527,12 @@ def construir_matriz() -> pd.DataFrame:
     # depois dos limites de proposito: celula anulada por implausibilidade tambem
     # pode ser recuperada da descricao.
     df, preenchidos_do_texto = enriquecer(df)
+    # depois do enriquecimento, e nao antes: 'enriquecer' recupera area da
+    # descricao, e uma area recuperada corretamente (98 m2 no lugar de 988) faz
+    # a regra abaixo nem precisar disparar. Julgar antes puniria o anuncio que o
+    # proprio pipeline ainda ia consertar.
+    df, areas_anuladas = corrigir_area_implausivel(df)
+    df, info_repasse = remover_precos_que_nao_sao_venda(df)
     df, info_filtro = filtrar_comodidades(df, info_binarias["canonicas"])
     df = normalizar_bairro(df)
     df = normalizar_categoricas(df)
@@ -422,6 +551,8 @@ def construir_matriz() -> pd.DataFrame:
         "reparos_numericos": reparos,
         "valores_implausiveis_anulados": fora_da_faixa,
         "preenchidos_da_descricao": preenchidos_do_texto,
+        "areas_anuladas_por_incoerencia": areas_anuladas,
+        "repasse_agio": info_repasse,
         "binarias": info_binarias,
         "filtro": info_filtro,
     }

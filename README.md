@@ -124,10 +124,10 @@ estatística atravessa a fronteira treino/validação. O teste é tocado uma ún
 
 | Modelo | CV MAE (log) | Teste MAE | Erro % mediano | R² (log) |
 |---|---|---|---|---|
-| Gradient Boosting ajustado | 0,2057 | R$ 164.529 | 15,4% | 0,887 |
-| Gradient Boosting (padrão) | 0,2169 | R$ 171.596 | 16,8% | 0,881 |
-| Ridge | 0,2673 | R$ 250.871 | 21,1% | 0,821 |
-| Baseline (mediana) | 0,6381 | R$ 427.716 | 42,2% | −0,004 |
+| Gradient Boosting ajustado | 0,1998 | R$ 171.252 | 15,8% | 0,895 |
+| Gradient Boosting (padrão) | 0,2081 | R$ 174.248 | 16,6% | 0,891 |
+| Ridge | 0,2596 | R$ 252.782 | 19,8% | 0,839 |
+| Baseline (mediana) | 0,6183 | R$ 443.793 | 43,1% | −0,002 |
 
 Metodologia, decisões e limitações: [docs/modelagem.md](docs/modelagem.md).
 
@@ -147,10 +147,9 @@ depende. Três resultados:
   proxy; a segunda só funciona em interação — que é por que o boosting ganha do
   Ridge.
 
-A análise também expôs dois problemas de dado. Os 19 anúncios abaixo de R$ 50 mil
-erram +75% na mediana porque não são preços de venda (R$ 603/m² contra uma
-mediana de R$ 9.045/m²) — registrado, ainda não tratado. O outro foi corrigido:
-ver abaixo. Detalhes: §9 de [docs/modelagem.md](docs/modelagem.md).
+A análise também expôs dois problemas de dado, os dois corrigidos depois: o
+bairro (etapa 4c) e o preço que não era preço (etapa 4d). Detalhes: §9 de
+[docs/modelagem.md](docs/modelagem.md).
 
 ### Etapa 4c — canonização dos bairros
 
@@ -180,6 +179,31 @@ Medido em A/B sobre as mesmas linhas e folds: CV **0,2144 → 0,2097**, com os 5
 folds concordando. Fechar a lista nos 64 oficiais e reajustar os
 hiperparâmetros sobre a base nova levaram a CV a **0,2057**. E a matriz depois do one-hot
 cai de 349 para 131 colunas, com o modelo melhor.
+
+### Etapa 4d — o preço que não era preço
+
+Os anúncios mais baratos da base não eram imóveis baratos: eram **repasses de
+financiamento**. O valor anunciado é o ágio pago pelas chaves, e o comprador
+ainda assume as parcelas — dois produtos com o mesmo rótulo `preco_venda`.
+*"Repasse no Valentina: Chaves R$ 21.500 e Parcela Menor que Aluguel (R$ 719)"*.
+
+A distribuição de preço/m² não tem vale, então o piso foi calibrado contra um
+sinal independente: a palavra "repasse"/"ágio" no texto, que 177 anúncios
+declaram. Em R$ 1.000/m², 76% dos descartados se autodeclaram. Em R$ 1.500 a
+precisão cai para 50% — porque ali entra uma população **legítima**: 311 vendas
+diretas/leilão da Caixa, com preço/m² entre R$ 1.164 e R$ 1.899. O piso fica
+abaixo delas de propósito, ao custo declarado de 21 falsos positivos.
+
+Nove anúncios tinham o defeito inverso — a **área** errada, o preço certo (988 m²
+num anúncio intitulado "98m²"). Aí anula-se a área, não a linha, e a regra roda
+antes do piso para que o preço válido não saia junto.
+
+**A base cai de 15.583 para 15.476 linhas e a CV vai de 0,2057 a 0,1998** — mas o
+A/B sobre as mesmas 3.087 linhas de teste mostra que o efeito real é de apenas
+**+0,0031**, abaixo do limiar de 0,005 do projeto. O resto da "melhora" é o
+conjunto de avaliação ter perdido linhas impossíveis por construção. A afirmação
+correta não é que o modelo melhorou: é que a base ficou certa. §9.10 de
+[docs/modelagem.md](docs/modelagem.md).
 
 Por que a extração via LLM do zap continua pendente — e por que completá-la
 provavelmente não vale a pena:

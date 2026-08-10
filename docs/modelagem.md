@@ -13,15 +13,15 @@
 |---|---|
 | Tipo | Regressão |
 | Alvo | `log(preco_venda)` |
-| Observações | 15.408 anúncios com preço |
-| Imóveis físicos distintos | 14.099 |
-| Features | 75 na matriz → 131 depois do one-hot dentro do `Pipeline` |
+| Observações | 15.301 anúncios com preço |
+| Imóveis físicos distintos | 14.022 |
+| Features | 75 na matriz → 119 depois do one-hot dentro do `Pipeline` |
 | Semente | `42`, em `dataset.SEMENTE` |
 
 O alvo vai para log porque a distribuição em reais tem **assimetria 5,92 e curtose
-80,4**: a mediana é R$ 575 mil e o máximo R$ 19,8 milhões, então um punhado de
+80,4**: a mediana é R$ 580 mil e o máximo R$ 19,8 milhões, então um punhado de
 imóveis de altíssimo padrão domina o erro quadrático das 16 mil observações. Em
-log a assimetria cai para −0,44. As métricas são reconvertidas para reais na
+log a assimetria cai para −0,32. As métricas são reconvertidas para reais na
 avaliação, porque é nelas que a resposta faz sentido.
 
 ---
@@ -40,7 +40,7 @@ A assinatura do imóvel é `(preço arredondado ao milhar, área, quartos, banhe
 garagens)`. Anúncio sem preço ou sem área não tem assinatura utilizável e vira
 grupo próprio, em vez de se juntar a um grupo gigante de nulos.
 
-Resultado: **12.322 no treino, 3.086 no teste, 0 grupos dos dois lados.** O
+Resultado: **12.214 no treino, 3.087 no teste, 0 grupos dos dois lados.** O
 `train.py` verifica isso a cada execução e aborta se não for zero.
 
 ---
@@ -116,21 +116,21 @@ de modelo.
 
 | Modelo | CV MAE (log) | Teste MAE | Erro % mediano | R² (log) |
 |---|---|---|---|---|
-| **Gradient Boosting ajustado** | **0,2057 ± 0,0041** | **R$ 164.529** | **15,4%** | **0,887** |
-| Gradient Boosting (padrão) | 0,2169 ± 0,0033 | R$ 171.596 | 16,8% | 0,881 |
-| Ridge | 0,2673 ± 0,0020 | R$ 250.871 | 21,1% | 0,821 |
-| Baseline (mediana) | 0,6381 ± 0,0053 | R$ 427.716 | 42,2% | −0,004 |
+| **Gradient Boosting ajustado** | **0,1998 ± 0,0032** | **R$ 171.252** | **15,8%** | **0,895** |
+| Gradient Boosting (padrão) | 0,2081 ± 0,0042 | R$ 174.248 | 16,6% | 0,891 |
+| Ridge | 0,2596 ± 0,0017 | R$ 252.782 | 19,8% | 0,839 |
+| Baseline (mediana) | 0,6183 ± 0,0024 | R$ 443.793 | 43,1% | −0,002 |
 
 O baseline existe como piso de sanidade: prever sempre a mediana. Seu R² de
 −0,001 confirma que a montagem está correta — um baseline honesto tem que ficar
 em torno de zero.
 
-O gradient boosting ajustado erra **15,4% na mediana**. Para um imóvel de R$ 575 mil, isso
+O gradient boosting ajustado erra **15,8% na mediana**. Para um imóvel de R$ 580 mil, isso
 é uma faixa de cerca de R$ 100 mil — aceitável para triagem, insuficiente para
 avaliação individual. O desvio da CV é pequeno (±0,004) frente à diferença entre
-os modelos (0,07), então a vantagem sobre o Ridge é real, não ruído de partição.
+os modelos (0,06), então a vantagem sobre o Ridge é real, não ruído de partição.
 
-A distância entre Ridge e boosting (0,057) indica relações não-lineares e interações
+A distância entre Ridge e boosting (0,060) indica relações não-lineares e interações
 relevantes — provavelmente entre área, bairro e padrão de acabamento.
 
 ---
@@ -154,7 +154,7 @@ relevantes — provavelmente entre área, bairro e padrão de acabamento.
   `error_score="raise"` e aborta se algum score não for finito.
 - **O early stopping usa uma validação interna não agrupada.** O
   `HistGradientBoostingRegressor` liga `early_stopping='auto'` sozinho acima de
-  10.000 amostras — temos 12.322 — e separa 10% para decidir quando parar. Essa
+  10.000 amostras — temos 12.214 — e separa 10% para decidir quando parar. Essa
   fatia é sorteada **aleatoriamente**, não pela assinatura do imóvel, então pode
   conter cópia de uma linha de treino e fazer o modelo parar um pouco tarde. O
   efeito é limitado (decide só o momento de parada, não seleção de atributos),
@@ -503,6 +503,10 @@ sem descartar imóvel pequeno legitimamente barato. Fica registrado como próxim
 passo; não foi aplicado agora porque mudaria a base sob os números já relatados
 nesta etapa.
 
+> Aplicado depois, na seção **9.10** — onde a investigação mostrou que a hipótese
+> acima estava certa na conclusão e errada na causa: não era erro de digitação,
+> era outro produto vendido com a mesma etiqueta.
+
 Dois outros segmentos, para fechar:
 
 - **Portal.** `zapimoveis` 15,7%, `chaves_na_mao` 15,9%, anúncios presentes nos
@@ -707,3 +711,113 @@ real apareceu em outro lugar: no Q1, onde o erro caiu 2,7 pontos.
 Saídas em `data/processed/`: `residuos_teste.csv`, `residuos_por_segmento.csv`,
 `importancia_permutacao.csv`, `importancia_permutacao_codificada.csv` (esta com o
 `|Spearman|` ao lado, para o confronto de §9.4).
+
+### 9.10 O preço que não era preço
+
+A §9.5 registrou 19 anúncios com erro de +75% e propôs um piso por preço/m².
+Ao abrir os anúncios para escolher o valor do piso, apareceu a causa — e ela não
+era a suposta:
+
+> *"Repasse no Valentina: Chaves R$ 21.500 mil e Parcela Menor que Aluguel (R$ 719)"*
+
+Não é erro de digitação. É **repasse (ágio)**: o anunciante vende a posição dele
+num financiamento, e o valor da etiqueta é o que se paga pelas chaves — o
+comprador ainda assume as parcelas restantes. São dois produtos diferentes com o
+mesmo rótulo `preco_venda`. Mantidos na base, ensinam que um apartamento de dois
+quartos no Gramame vale R$ 22.000.
+
+**Por que o corte não é onde a intuição colocaria.** A distribuição global de
+preço/m² não tem vale: é contínua de R$ 250 a R$ 4.000. Então o piso é escolha,
+não descoberta — e foi calibrado contra um sinal *independente*, a palavra
+"repasse" ou "ágio" no texto do anúncio, que 177 anúncios declaram:
+
+| piso | descartados | declaram repasse | precisão |
+|---|---|---|---|
+| R$ 500 | 31 | 25 | 81% |
+| **R$ 1.000** | **111** | **84** | **76%** |
+| R$ 1.500 | 210 | 104 | 50% |
+| R$ 2.000 | 440 | 111 | 25% |
+
+A precisão desaba entre R$ 1.000 e R$ 1.500. A queda tem nome: ali entra uma
+segunda população, **legítima**. São 311 anúncios de venda direta/leilão da
+Caixa, com preço/m² concentrado entre R$ 1.164 (p05) e R$ 1.899 (p75) — vendas
+reais num regime de preço deprimido, não erro. O piso em R$ 2.000, que a leitura
+ingênua da §9.5 sugeria, teria apagado todas elas.
+
+O piso fica **abaixo** do p05 desse grupo, de propósito. Custo assumido e
+declarado: 21 anúncios de venda direta caem junto, 19% dos descartes. É o preço
+de não fazer uma regra de validade de dado depender de texto de marketing.
+
+O texto **calibrou** o piso; não filtra nada. Usar "repasse" como filtro
+descartaria anúncio comum que só cita a palavra no rodapé da imobiliária — 78
+dos 177 têm preço/m² acima de R$ 1.250 e são anúncios normais.
+
+#### A área é outro defeito, e pede outro remédio
+
+Nove anúncios têm preço/m² baixo por um motivo diferente: a **área** está errada,
+o preço está certo. É o separador decimal perdido no scrape — 988 m² num anúncio
+cujo próprio título diz *"Vista para o Mar em Manaíra | 98m²"*, e 1.372 m² em
+outro que se anuncia como *"137,20 m² e 3 quartos"*.
+
+Aqui o vale que falta na distribuição global **existe**: entre os 85 anúncios com
+mais de 400 m², o preço/m² pula de R$ 1.666 para R$ 3.288 sem nada no meio.
+Qualquer limiar entre 1.700 e 3.200 separa os mesmos nove anúncios.
+
+Os dois lados do vale são reconhecíveis. Abaixo: 1.280 m² de 3 quartos em Tambaú
+por R$ 550.000. Acima: coberturas de 5 quartos no Cabo Branco e no Miramar, de
+664 e 1.260 m², por R$ 11 e R$ 19,8 milhões — que são **reais**. Um teto absoluto
+de área mataria justamente os imóveis mais caros da base. Por isso a regra olha o
+par (área, preço/m²), nunca a área sozinha.
+
+O remédio também difere: aqui **anula-se a área**, não a linha. O preço de
+R$ 1.019.334 no Jardim Oceania é dado bom; só a área de 984 m² é que é 98,4.
+
+E a ordem importa. A regra da área roda **antes** do piso: sem área, esses
+anúncios deixam de ter preço/m² e saem da mira do descarte seguinte — que é o
+que se quer, porque o problema deles nunca foi o preço. Rodando na ordem
+inversa, os R$ 550.000 de Tambaú sairiam da base junto com a área errada.
+
+Ambas as regras rodam **depois** do enriquecimento pela descrição: se o pipeline
+recupera "98 m²" do texto, a regra nem precisa disparar. Julgar antes puniria o
+anúncio que o próprio pipeline ia consertar.
+
+#### O ganho é quase todo ilusório, e mesmo assim vale
+
+A base foi de 15.583 para **15.476** linhas (107 descartes, 9 áreas anuladas) e o
+número relatado melhorou bastante:
+
+| | antes | depois |
+|---|---|---|
+| CV MAE (log) | 0,2057 | **0,1998** |
+| R² (log) | 0,887 | **0,895** |
+
+Mas **esses dois números não são comparáveis**: mudaram a base *e* o conjunto de
+teste. A pergunta que importa — a presença do ágio no treino piora a previsão dos
+anúncios legítimos? — exige avaliar os dois modelos nas mesmas linhas.
+
+Split calculado uma vez sobre as 15.292 linhas idênticas nas duas bases, mesmo
+teste de 3.087 anúncios, única diferença sendo os 107 de ágio no treino de A:
+
+| | CV | teste MAE(log) | erro mediano | R² |
+|---|---|---|---|---|
+| A: com ágio no treino | 0,2091 | 0,2035 | 15,37% | 0,8925 |
+| B: sem ágio no treino | 0,2002 | **0,2005** | 15,47% | **0,8971** |
+
+O efeito real é **+0,0031** de MAE(log) e **+0,0046** de R². O erro mediano fica
+0,10 p.p. *pior*, o que é ruído. Ou seja: dos 0,0059 de melhora relatada, cerca
+de metade é o modelo prevendo melhor e o resto é o conjunto de avaliação ter
+perdido linhas que eram impossíveis por construção.
+
+E 0,0031 **não passa** o limiar de 0,005 do projeto. Então a afirmação correta
+não é "o modelo melhorou": é que **a base ficou certa**. Aqueles 107 anúncios não
+tinham preço de venda para prever, e um modelo julgado por acertá-los estava
+sendo julgado pela pergunta errada.
+
+É a mesma lição da §9.7 pelo avesso. Lá, purificar uma categoria piorou o número
+e o tornou honesto. Aqui, remover registros inválidos melhorou o número — e a
+parte do ganho que é honesta é a menor.
+
+Sobra registrado: a venda direta/leilão é uma população de 311 anúncios com
+regime de preço próprio, e hoje o modelo não sabe distinguí-la. Uma binária
+`venda_direta` é candidata natural a atributo — não foi criada agora para não
+misturar mudança de dado com mudança de modelo na mesma medição.
