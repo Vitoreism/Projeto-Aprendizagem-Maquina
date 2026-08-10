@@ -4,6 +4,26 @@
 
 ---
 
+> ### ⚠️ Duas configurações aparecem neste documento — leia isto antes das tabelas
+>
+> | | configuração | onde ela aparece | CV MAE(log) | Teste MAE |
+> |---|---|---|---|---|
+> | **[A]** | `DecisionTreeRegressor(random_state=42)` — **sem poda** | é a **registrada** em `arvore.py`, e portanto é a que entra na tabela oficial de [`comparacao_modelos.md`](../comparacao_modelos.md) | 0,2846 | R$ 244.051 |
+> | **[B]** | `ccp_alpha=5e-5`, `min_samples_leaf=5` — **podada** | é a **vencedora do `GridSearchCV`**, medida e documentada aqui (§4). **Não** está registrada no candidato | 0,2450 | R$ 200.983 |
+>
+> As seções 3 e 6 descrevem **[A]**; as seções 4, 5 e 7 descrevem **[B]**. A escolha de
+> deixar **[A]** registrada é deliberada e serve à seção 3: é ela que produz a curva de
+> overfitting, que é o entregável didático desta issue. Mas isso significa que
+> **o número da árvore na comparação final é o do modelo sem poda** — quem apresentar
+> precisa dizer isso, em vez de citar R$ 200.983 como se fosse o resultado da tabela oficial.
+>
+> Nota de contexto: KNN e MLP também estão registrados na configuração inicial dos seus
+> donos, não na vencedora de busca (`melhores_hiperparametros.json` só cobre `ridge` e
+> `gradient_boosting`). Trocar só a árvore para **[B]** substituiria uma assimetria por
+> outra — por isso a correção aqui é de documentação, não de configuração.
+
+---
+
 ## 1. Por que este modelo está na lista
 
 O `DecisionTreeRegressor` é o modelo mais explicável do conjunto e atua como a **ponte conceitual para o Gradient Boosting** (`HistGradientBoostingRegressor`). O boosting nada mais é do que um conjunto (*ensemble*) de centenas de árvores rasas, onde cada árvore subsequente é treinada para corrigir os resíduos da anterior. Na defesa/apresentação do projeto, a Árvore de Decisão permite mostrar a estrutura visual de decisão (raiz, ramificações e folhas) para explicitar como os cortes por limiar funcionam sobre os atributos dos imóveis em João Pessoa.
@@ -67,11 +87,16 @@ A busca em grade foi realizada com `GroupKFold(n_splits=5)` considerando a varia
 - **`ccp_alpha = 0.00005`**: Mínimo interior na grade `[0.0, 1e-05, 5e-05, 0.0001, 0.0002, 0.0005, 0.001, 0.005]` $\rightarrow$ **OK** (mínimo interior bem definido).
 - **`max_depth = None`**: Como `ccp_alpha` e `min_samples_leaf` realizam a poda ideal via penalização de complexidade, limitar a profundidade máxima torna-se redundante.
 
-### Desempenho do Modelo Otimizado (Podado)
+### Desempenho do Modelo Otimizado (Podado) — configuração **[B]**
 - **Melhor CV Val MAE (log):** `0,2450` (uma redução drástica de 0,0382 no erro log em relação à árvore sem poda de 0,2832!).
 - **Teste MAE em Reais:** **R$ 200.983** (Redução de **R$ 41.991** no erro médio frente à árvore sem poda de R$ 242.974).
 - **Erro Mediano Percentual:** `17,6%`
 - **R² em Log:** `0,843`
+
+> Estes quatro números são de **[B]**, a configuração vencedora da busca — que **não é**
+> a registrada em `arvore.py`. Eles não aparecem, e não devem aparecer, na tabela de
+> [`comparacao_modelos.md`](../comparacao_modelos.md), que compara os candidatos como
+> cada dono os inscreveu. Lá a árvore é **[A]**: CV 0,2846 e teste R$ 244.051.
 
 ---
 
@@ -128,5 +153,6 @@ Como o `bairro` possui 66 níveis (transformado em 66 colunas binárias no one-h
 ## 7. Conclusão e Recomendação para a Banca
 
 1. **Demonstração Didática:** A Árvore de Decisão cumpre perfeitamente seu papel de mostrar a curva de overfitting (treino memorizado em `max_depth=None` vs. modelo podado com `ccp_alpha=0.00005`) e expor a estrutura de decisão em 4 níveis.
-2. **Comparativo com Gradient Boosting:** O melhor MAE de teste da Árvore de Decisão podada foi **R$ 200.983** (`MAE log = 0,2450`). Embora seja uma evolução expressiva em relação à árvore sem poda (R$ 242.974), ela fica atrás do `HistGradientBoostingRegressor` (que alcança MAE em teste próximo de R$ 160.000 / `MAE log ~ 0,20`).
-3. **Trade-off:** A Árvore de Decisão oferece a **maior explicabilidade** do projeto, ao custo de um erro absoluto médio ~R$ 40.000 maior do que o algoritmo de boosting baseado em ensembling.
+2. **Comparativo com Gradient Boosting:** O melhor MAE de teste da Árvore de Decisão podada (**[B]**) foi **R$ 200.983** (`MAE log = 0,2450`). Embora seja uma evolução expressiva em relação à árvore sem poda (R$ 242.974), ela fica atrás do `HistGradientBoostingRegressor` (R$ 170.150 / `MAE log = 0,1988` na rodada oficial da issue #25).
+3. **Trade-off:** A Árvore de Decisão oferece a **maior explicabilidade** do projeto — é a nº 1 nessa dimensão no critério de desempate de `decisao.py` — ao custo de um erro absoluto médio ~R$ 31.000 maior que o boosting, na sua melhor configuração.
+4. **O que dizer na comparação final.** Na tabela oficial a árvore aparece como **[A]**, sem poda: CV 0,2846, teste R$ 244.051, erro mediano 20,0%. Ela **perde** de Ridge e OLS na CV (0,2551) e só os supera no MAE em reais do teste — o que é sintoma de **variância alta**, não de que a CV escolheu errado. A leitura honesta é: *"a árvore inscrita na comparação é a sem poda, de propósito, porque é ela que demonstra o overfitting; a versão podada chegaria a 0,2450 e ficaria à frente dos lineares, e esse número está medido aqui na §4."*
