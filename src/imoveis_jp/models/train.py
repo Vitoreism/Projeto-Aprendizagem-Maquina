@@ -11,6 +11,7 @@ tocado uma unica vez, no fim.
 from __future__ import annotations
 
 import json
+import time
 from typing import Dict, List
 
 import numpy as np
@@ -26,6 +27,11 @@ from sklearn.preprocessing import OneHotEncoder, StandardScaler
 
 from imoveis_jp import config
 from imoveis_jp.models import candidatos, dataset
+
+
+def _log(msg: str) -> None:
+    """Print imediato no terminal (flush) para acompanhar modelos lentos como KNN."""
+    print(msg, flush=True)
 
 SAIDA_RESULTADOS = config.PROCESSED / "resultados_modelos.csv"
 SAIDA_RELATORIO = config.INTERIM / "relatorio_treino.json"
@@ -169,30 +175,34 @@ def executar() -> pd.DataFrame:
     config.ensure_dirs()
 
     X, y, grupos = dataset.carregar()
-    print(f"[Dados] {len(X)} anuncios x {X.shape[1]} features.", flush=True)
-    print(f"[Dados] {grupos.nunique()} imoveis fisicos distintos.", flush=True)
+    _log(f"[Dados] {len(X)} anuncios x {X.shape[1]} features.")
+    _log(f"[Dados] {grupos.nunique()} imoveis fisicos distintos.")
 
     X_tr, X_te, y_tr, y_te, g_tr, g_te = dataset.dividir(X, y, grupos)
     vazados = dataset.diagnostico_split(g_tr, g_te)
-    print(
+    _log(
         f"[Split] treino={len(X_tr)} teste={len(X_te)} "
-        f"(semente={dataset.SEMENTE}, agrupado por imovel).",
-        flush=True,
+        f"(semente={dataset.SEMENTE}, agrupado por imovel)."
     )
-    print(f"[Split] grupos presentes nos dois lados: {vazados} (tem que ser 0).", flush=True)
+    _log(f"[Split] grupos presentes nos dois lados: {vazados} (tem que ser 0).")
     if vazados:
         raise RuntimeError("split vazou: o mesmo imovel esta no treino e no teste")
 
     numericas, binarias, categoricas = dataset.colunas_por_tipo(X)
-    print(
+    _log(
         f"[Features] {len(numericas)} continuas, {len(binarias)} binarias, "
-        f"{len(categoricas)} nominais (codificadas dentro do Pipeline).",
-        flush=True,
+        f"{len(categoricas)} nominais (codificadas dentro do Pipeline)."
     )
     modelos = montar_modelos(numericas, binarias, categoricas)
+    nomes = list(modelos)
+    total = len(nomes)
+    _log(f"[Fila] {total} modelos a treinar, nesta ordem:")
+    for i, nome in enumerate(nomes, start=1):
+        _log(f"         {i}/{total}  {nome}")
 
     linhas = []
-    for nome, modelo in modelos.items():
+    inicio_geral = time.perf_counter()
+    for indice, (nome, modelo) in enumerate(modelos.items(), start=1):
         # a CV reajusta imputacao e escala dentro de cada fold.
         #
         # folds em serie de proposito: o HistGradientBoosting ja e multi-thread
@@ -200,6 +210,16 @@ def executar() -> pd.DataFrame:
         # maquina -- um worker morria e o score virava nan silenciosamente.
         # error_score="raise" garante que uma falha estoure em vez de virar nan
         # no csv de resultados.
+        _log("")
+        _log("=" * 72)
+        _log(f"[Modelo {indice}/{total}] >>> INICIANDO: {nome}")
+        _log("=" * 72)
+
+        _log(
+            f"[{nome}] (1/3) Validacao cruzada GroupKFold({FOLDS}) "
+            f"no treino -- pode demorar em modelos lentos (ex.: knn)..."
+        )
+        t0 = time.perf_counter()
         scores = cross_val_score(
             modelo,
             X_tr,
@@ -210,15 +230,26 @@ def executar() -> pd.DataFrame:
             error_score="raise",
         )
         mae_cv = -scores
+        _log(
+            f"[{nome}] (1/3) CV concluida em {time.perf_counter() - t0:.1f}s | "
+            f"MAE(log)={mae_cv.mean():.4f} +/- {mae_cv.std():.4f}"
+        )
 
         if not np.isfinite(mae_cv).all():
             raise RuntimeError(f"validacao cruzada de '{nome}' produziu score nao-finito")
 
+        _log(f"[{nome}] (2/3) Ajustando no treino completo ({len(X_tr)} linhas)...")
+        t0 = time.perf_counter()
         modelo.fit(X_tr, y_tr)
+        _log(f"[{nome}] (2/3) Fit concluido em {time.perf_counter() - t0:.1f}s")
+
         # Train-set metrics after fit: useful to detect memorization (gap vs test).
         # CV remains the honest score on the training side during model selection.
+        _log(f"[{nome}] (3/3) Avaliando no treino e no teste...")
+        t0 = time.perf_counter()
         metricas_treino = metricas_em_reais(y_tr.to_numpy(), modelo.predict(X_tr))
         metricas_teste = metricas_em_reais(y_te.to_numpy(), modelo.predict(X_te))
+        _log(f"[{nome}] (3/3) Avaliacao concluida em {time.perf_counter() - t0:.1f}s")
 
         linhas.append(
             {
@@ -229,16 +260,17 @@ def executar() -> pd.DataFrame:
                 **{f"{chave}_teste": valor for chave, valor in metricas_teste.items()},
             }
         )
-        print(
-            f"[{nome:18s}] CV MAE(log)={mae_cv.mean():.4f} +/- {mae_cv.std():.4f} | "
+        _log(
+            f"[{nome}] RESULTADO | "
+            f"CV MAE(log)={mae_cv.mean():.4f} +/- {mae_cv.std():.4f} | "
             f"treino MAE=R$ {metricas_treino['mae_reais']:,.0f} "
             f"({metricas_treino['erro_percentual_mediano']:.1f}%) "
             f"R2={metricas_treino['r2_log']:.3f} | "
             f"teste MAE=R$ {metricas_teste['mae_reais']:,.0f} "
             f"({metricas_teste['erro_percentual_mediano']:.1f}%) "
-            f"R2={metricas_teste['r2_log']:.3f}",
-            flush=True,
+            f"R2={metricas_teste['r2_log']:.3f}"
         )
+        _log(f"[Modelo {indice}/{total}] <<< CONCLUIDO: {nome}")
 
     resultados = pd.DataFrame(linhas).sort_values("cv_mae_log_media").reset_index(drop=True)
     resultados.to_csv(SAIDA_RESULTADOS, index=False, encoding="utf-8")
@@ -262,15 +294,19 @@ def executar() -> pd.DataFrame:
             indent=2,
         )
 
-    print("\n" + "=" * 72)
-    print("RESULTADOS (ordenados pelo MAE da validacao cruzada no treino)")
-    print("Colunas *_treino: score no proprio conjunto de treino apos o fit")
-    print("Colunas *_teste:  score no hold-out (generalizacao)")
-    print("=" * 72)
-    print(resultados.to_string(index=False, float_format=lambda v: f"{v:,.4f}"))
-    print("=" * 72)
-    print(f"Resultados: {SAIDA_RESULTADOS}")
-    print(f"Relatorio:  {SAIDA_RELATORIO}")
+    _log("")
+    _log("=" * 72)
+    _log(
+        f"RESULTADOS (ordenados pelo MAE da CV) | "
+        f"tempo total={time.perf_counter() - inicio_geral:.1f}s"
+    )
+    _log("Colunas *_treino: score no proprio conjunto de treino apos o fit")
+    _log("Colunas *_teste:  score no hold-out (generalizacao)")
+    _log("=" * 72)
+    _log(resultados.to_string(index=False, float_format=lambda v: f"{v:,.4f}"))
+    _log("=" * 72)
+    _log(f"Resultados: {SAIDA_RESULTADOS}")
+    _log(f"Relatorio:  {SAIDA_RELATORIO}")
 
     return resultados
 
