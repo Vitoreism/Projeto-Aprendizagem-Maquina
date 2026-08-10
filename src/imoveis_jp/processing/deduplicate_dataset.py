@@ -34,51 +34,58 @@ def normalizar_texto(texto: Any) -> str:
     return s
 
 
-#: bairros oficiais de joao pessoa e adjacencias onde ha anuncio na base.
+#: os 64 bairros oficiais de joao pessoa. esta e a lista fechada: nenhum outro
+#: valor pode sair de extrair_bairro, alem de 'nao_informado'.
 #:
-#: fonte: data/processed/neighborhoods.csv, coluna 'name'. so o NOME e usado --
-#: as colunas de preco daquele arquivo sao agregacao do proprio alvo
-#: (correlacionam 0,996 com a mediana desta base) e estao barradas por
-#: vazamento. um dicionario de nomes nao carrega informacao de preco.
+#: o neighborhoods.csv do projeto NAO serve de referencia aqui -- ele mistura
+#: bairro oficial com loteamento, conjunto e ate praia de outro municipio
+#: (Camboinha e Cabedelo, Carapibus e Conde), e usa nomes que nao sao os
+#: oficiais: 'Altiplano Cabo Branco' onde o bairro se chama Altiplano,
+#: 'Jose Americo De Almeida' onde se chama Jose Americo.
 BAIRROS_OFICIAIS = (
-    "Aeroclube", "Agua Fria", "Altiplano Cabo Branco", "Alto Do Ceu", "Alto Do Mateus",
-    "Anatolia", "Bancarios", "Barra De Gramame", "Bessa", "Brisamar", "Cabo Branco",
-    "Castelo Branco", "Centro", "Cidade Dos Colibris", "Cidade Verde", "Colinas Do Sul",
-    "Conjunto Esplanada", "Conjunto Valentina Figueredo I", "Costa E Silva",
-    "Cristo Redentor", "Cruz Das Armas", "Cuia", "Distrito Industrial", "Ernesto Geisel",
-    "Ernani Satiro", "Estados", "Expedicionarios", "Funcionarios", "Gramame", "Industrias",
-    "Ipes", "Jaguaribe", "Jardim 13 De Maio", "Jardim Cidade Universitaria",
-    "Jardim Das Acacias", "Jardim Luna", "Jardim Oceania", "Jardim Planalto",
-    "Jardim Sao Paulo", "Jardim Veneza", "Joao Agripino", "Joao Paulo Ii",
-    "Jose Americo De Almeida", "Loteamento Quintas De Gramame", "Manaira", "Mandacaru",
-    "Mangabeira", "Miramar", "Mumbaba", "Mucumagro", "Novo Milenio", "Oitizeiro",
-    "Paratibe", "Pedro Gondim", "Penha", "Planalto Boa Esperanca", "Ponta Do Seixas",
-    "Portal Do Sol", "Praia De Camboinha", "Praia De Carapibus", "Rangel", "Sao Jose",
-    "Tambauzinho", "Tambau", "Tambia", "Torre", "Treze De Maio", "Valentina De Figueiredo",
-    "Varjao",
+    "Aeroclube", "Agua Fria", "Altiplano", "Alto do Ceu", "Alto do Mateus",
+    "Anatolia", "Bancarios", "Barra de Gramame", "Bessa", "Brisamar", "Cabo Branco",
+    "Castelo Branco", "Centro", "Cidade dos Colibris", "Costa do Sol", "Costa e Silva",
+    "Cristo Redentor", "Cruz das Armas", "Cuia", "Distrito Industrial", "Ernani Satiro",
+    "Ernesto Geisel", "Estados", "Expedicionarios", "Funcionarios", "Gramame", "Grotao",
+    "Ilha do Bispo", "Industrias", "Ipes", "Jaguaribe", "Jardim Cidade Universitaria",
+    "Jardim Oceania", "Jardim Sao Paulo", "Jardim Veneza", "Joao Agripino",
+    "Joao Paulo II", "Jose Americo", "Manaira", "Mandacaru", "Mangabeira", "Miramar",
+    "Mucumagro", "Mumbaba", "Mussure", "Oitizeiro", "Padre Ze", "Paratibe",
+    "Pedro Gondim", "Penha", "Planalto da Boa Esperanca", "Ponta do Seixas",
+    "Portal do Sol", "Roger", "Sao Jose", "Tambau", "Tambauzinho", "Tambia", "Torre",
+    "Treze de Maio", "Trincheiras", "Valentina de Figueiredo", "Varadouro", "Varjao",
 )
 
-#: bairros reais que faltavam no neighborhoods.csv e aparecem na base. so entra
-#: aqui nome verificavel de bairro de joao pessoa -- a alternativa e o anuncio
-#: cair em 'nao_informado', nunca inventar categoria.
-BAIRROS_COMPLEMENTARES = (
-    "Trincheiras", "Costa Do Sol", "Varadouro", "Roger", "Ilha Do Bispo",
-    "Bairro Das Industrias", "Grotao", "Muçumagro", "Jardim Mangueira",
-    "Padre Ze", "Alto Do Mateus", "Bairro Dos Novais", "Cidade Universitaria",
-)
-
-#: variantes que o casamento por tokens nao resolve sozinho, porque o nome usado
-#: no anuncio nao contem todos os tokens do nome oficial.
+#: nomes que os anuncios usam e que designam um bairro oficial sob outro rotulo.
+#: cada linha aqui e uma afirmacao verificavel sobre o mesmo lugar, nao um chute
+#: de vizinhanca -- localidade que eu nao consiga confirmar vai para
+#: 'nao_informado', porque inventar o bairro mais proximo repetiria o defeito
+#: que esta funcao acabou de corrigir.
 ALIASES_BAIRRO = {
+    # o bairro se chama Altiplano; 'Altiplano Cabo Branco' e o nome comercial.
+    # precisa vir com os 3 tokens para vencer 'cabo branco' na especificidade.
+    "altiplano cabo branco": "altiplano",
+    # 'Varjao (Rangel)' -- os dois nomes designam o mesmo bairro.
+    "rangel": "varjao",
+    # variantes de escrita do nome oficial
+    "planalto boa esperanca": "planalto_da_boa_esperanca",
+    "planalto": "planalto_da_boa_esperanca",
+    "jose americo de almeida": "jose_americo",
+    "jardim 13 de maio": "treze_de_maio",
+    "13 de maio": "treze_de_maio",
+    "conjunto valentina figueredo i": "valentina_de_figueiredo",
+    "valentina figueredo": "valentina_de_figueiredo",
+    "valentina": "valentina_de_figueiredo",
+    "bairro das industrias": "industrias",
     "cidade universitaria": "jardim_cidade_universitaria",
     "conjunto pedro gondim": "pedro_gondim",
-    "valentina": "valentina_de_figueiredo",
     "geisel": "ernesto_geisel",
-    "planalto": "planalto_boa_esperanca",
     "colibris": "cidade_dos_colibris",
     "seixas": "ponta_do_seixas",
-    "jose americo": "jose_americo_de_almeida",
-    "13 de maio": "treze_de_maio",
+    # loteamento dentro de Gramame, nao bairro proprio
+    "loteamento quintas de gramame": "gramame",
+    "quintas de gramame": "gramame",
 }
 
 #: artigos e conjuncoes nao distinguem bairro: 'valentina figueiredo' e
@@ -106,14 +113,25 @@ def _slug(nome: str) -> str:
     return _normalizar_nome(nome).replace(" ", "_")
 
 
-_POR_TOKENS: Dict[frozenset, str] = {
-    _tokens(n): _slug(n) for n in BAIRROS_OFICIAIS + BAIRROS_COMPLEMENTARES
-}
+#: os unicos valores que extrair_bairro pode devolver, alem de 'nao_informado'.
+CANONICOS = frozenset(_slug(n) for n in BAIRROS_OFICIAIS)
+
+_desconhecidos = sorted(set(ALIASES_BAIRRO.values()) - CANONICOS)
+if _desconhecidos:  # erro de digitacao no mapa de apelidos, nao dado ruim
+    raise ValueError(f"ALIASES_BAIRRO aponta para bairro inexistente: {_desconhecidos}")
+
+#: indice por conjunto de tokens, com apelidos e nomes oficiais no mesmo espaco.
+_POR_TOKENS: Dict[frozenset, str] = {_tokens(n): _slug(n) for n in BAIRROS_OFICIAIS}
+_POR_TOKENS.update({_tokens(a): c for a, c in ALIASES_BAIRRO.items()})
 
 #: do mais especifico para o menos. essa ordenacao E a correcao do bug antigo:
 #: a lista escrita a mao tinha 'cabo branco' antes de 'altiplano', entao
-#: "Altiplano Cabo Branco" casava com Cabo Branco -- 565 anuncios de um bairro
-#: 26% mais barato entravam no outro. agora vence sempre o nome mais especifico.
+#: "Altiplano Cabo Branco" casava com Cabo Branco -- 511 anuncios de um bairro
+#: com preco/m2 mediano 26% menor entravam no outro.
+#:
+#: os apelidos entram nesta ordenacao de proposito. o bairro se chama Altiplano
+#: (1 token), entao sozinho ele PERDERIA de 'cabo branco' (2 tokens) no endereco
+#: "Altiplano Cabo Branco" e o bug voltaria. O apelido de 3 tokens vence os dois.
 _POR_ESPECIFICIDADE = sorted(_POR_TOKENS.items(), key=lambda kv: -len(kv[0]))
 
 
@@ -124,13 +142,15 @@ def casar_bairro(texto: Any) -> Optional[str]:
     resolve como 'nao_informado'. Era exatamente esse o defeito antigo -- o
     fallback pegava a primeira palavra com mais de 3 letras do endereco e
     produzia 'avenida', 'doutor', 'professor', 'maria' como se fossem bairros.
+
+    Localidade real que nao e bairro oficial (loteamento, conjunto, praia de
+    outro municipio) tambem devolve None, a menos que esteja em ALIASES_BAIRRO
+    com o bairro que a contem. Chutar o bairro mais proximo seria repetir o
+    defeito com outra roupa.
     """
     alvo = _normalizar_nome(texto)
     if not alvo or alvo in _NAO_BAIRRO:
         return None
-
-    if alvo in ALIASES_BAIRRO:
-        return ALIASES_BAIRRO[alvo]
 
     tokens = frozenset(alvo.split()) - _ARTIGOS
     if not tokens:
@@ -140,13 +160,9 @@ def casar_bairro(texto: Any) -> Optional[str]:
     if exato:
         return exato
 
-    # o nome oficial precisa caber inteiro dentro do texto ('38 bessa' -> bessa).
-    for tokens_oficiais, canonico in _POR_ESPECIFICIDADE:
-        if tokens_oficiais <= tokens:
-            return canonico
-
-    for apelido, canonico in ALIASES_BAIRRO.items():
-        if _tokens(apelido) <= tokens:
+    # o nome precisa caber inteiro dentro do texto ('38 bessa' -> bessa).
+    for tokens_conhecidos, canonico in _POR_ESPECIFICIDADE:
+        if tokens_conhecidos <= tokens:
             return canonico
 
     return None

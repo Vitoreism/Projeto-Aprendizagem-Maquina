@@ -13,19 +13,24 @@ from imoveis_jp.processing import deduplicate_dataset as dd
 
 
 def test_nome_mais_especifico_vence_o_mais_generico():
-    """O bug que mais custava: 565 anuncios do Altiplano viravam Cabo Branco.
+    """O bug que mais custava: 511 anuncios do Altiplano viravam Cabo Branco.
 
     A lista antiga era percorrida na ordem em que foi escrita, e 'cabo branco'
     vinha antes de 'altiplano'. Sao bairros distintos, com preco/m2 mediano de
     R$ 15.000 e R$ 11.156 -- 26% de diferenca fundida numa categoria so.
+
+    O bairro oficial se chama Altiplano, de um token so. Sozinho ele perderia
+    de 'cabo branco', de dois tokens; por isso 'altiplano cabo branco' esta em
+    ALIASES_BAIRRO e entra na ordenacao por especificidade com tres.
     """
-    assert dd.casar_bairro("Altiplano Cabo Branco") == "altiplano_cabo_branco"
+    assert dd.casar_bairro("Altiplano Cabo Branco") == "altiplano"
+    assert dd.casar_bairro("Altiplano") == "altiplano"
     assert dd.casar_bairro("Cabo Branco") == "cabo_branco"
 
     # o mesmo par, agora dentro de um endereco completo
     assert (
         dd.extrair_bairro("Rua Silvino Lopes, 50, Altiplano Cabo Branco,João Pessoa/PB")
-        == "altiplano_cabo_branco"
+        == "altiplano"
     )
 
 
@@ -84,6 +89,37 @@ def test_artigo_nao_distingue_bairro():
     assert dd.casar_bairro("Ponta dos Seixas") == "ponta_do_seixas"
 
 
+def test_apelido_designa_o_mesmo_bairro_oficial():
+    """Cada apelido e uma afirmacao sobre o mesmo lugar, nao um chute."""
+    # a Wikipedia lista 'Varjao (Rangel)': dois nomes, um bairro
+    assert dd.casar_bairro("Rangel") == "varjao"
+    assert dd.casar_bairro("Varjão") == "varjao"
+    # variantes de escrita do nome oficial
+    assert dd.casar_bairro("Planalto Boa Esperança") == "planalto_da_boa_esperanca"
+    assert dd.casar_bairro("José Américo de Almeida") == "jose_americo"
+    assert dd.casar_bairro("Jardim 13 de Maio") == "treze_de_maio"
+
+
+def test_localidade_que_nao_e_bairro_oficial_nao_vira_categoria():
+    """Loteamento, conjunto e praia de outro municipio nao sao bairro.
+
+    Chutar o bairro mais proximo repetiria, com outra roupa, o defeito que esta
+    funcao corrige. Sem confirmacao, 'nao_informado'.
+    """
+    assert dd.casar_bairro("Praia de Camboinha") is None   # Cabedelo
+    assert dd.casar_bairro("Praia de Carapibus") is None   # Conde
+    assert dd.casar_bairro("Jardim Luna") is None
+
+
+def test_apelido_aponta_para_bairro_existente():
+    """Guarda contra erro de digitacao no mapa de apelidos."""
+    assert not (set(dd.ALIASES_BAIRRO.values()) - dd.CANONICOS)
+
+
+def test_lista_oficial_tem_os_64_bairros():
+    assert len(dd.CANONICOS) == 64
+
+
 def test_numero_no_campo_nao_atrapalha():
     # '38 - Bessa' e '230 - Cabo Branco' aparecem na base
     assert dd.casar_bairro("38 Bessa") == "bessa"
@@ -103,7 +139,7 @@ def test_joao_pessoa_no_filtro_nao_derruba_bairros_com_joao():
 
 def test_toda_saida_e_nome_oficial():
     """A garantia central: ou e bairro da lista, ou e 'nao_informado'."""
-    oficiais = set(dd._POR_TOKENS.values()) | {"nao_informado"}
+    oficiais = dd.CANONICOS | {"nao_informado"}
     entradas = [
         "Rua X, 1, Manaíra,João Pessoa/PB",
         "Rua Y, 2 - Gramame, João Pessoa - PB",
@@ -122,6 +158,6 @@ def test_base_real_so_tem_bairro_oficial():
         pytest.skip("matriz de features ainda nao gerada")
 
     bairros = set(pd.read_csv(caminho, low_memory=False)["bairro"].dropna())
-    oficiais = set(dd._POR_TOKENS.values()) | {"nao_informado"}
+    oficiais = dd.CANONICOS | {"nao_informado"}
 
     assert not (bairros - oficiais), f"bairros fora da lista: {sorted(bairros - oficiais)}"

@@ -124,10 +124,10 @@ estatística atravessa a fronteira treino/validação. O teste é tocado uma ún
 
 | Modelo | CV MAE (log) | Teste MAE | Erro % mediano | R² (log) |
 |---|---|---|---|---|
-| Gradient Boosting ajustado | 0,2097 | R$ 164.414 | 15,8% | 0,885 |
-| Gradient Boosting (padrão) | 0,2175 | R$ 172.181 | 17,2% | 0,881 |
-| Ridge | 0,2665 | R$ 235.362 | 21,4% | 0,825 |
-| Baseline (mediana) | 0,6377 | R$ 418.247 | 43,7% | −0,006 |
+| Gradient Boosting ajustado | 0,2085 | R$ 164.579 | 15,4% | 0,886 |
+| Gradient Boosting (padrão) | 0,2176 | R$ 172.264 | 16,9% | 0,879 |
+| Ridge | 0,2672 | R$ 252.022 | 21,2% | 0,820 |
+| Baseline (mediana) | 0,6381 | R$ 427.716 | 42,2% | −0,004 |
 
 Metodologia, decisões e limitações: [docs/modelagem.md](docs/modelagem.md).
 
@@ -136,10 +136,10 @@ Metodologia, decisões e limitações: [docs/modelagem.md](docs/modelagem.md).
 `analysis` mede, **no conjunto de teste**, onde o modelo erra e do que ele
 depende. Três resultados:
 
-- **O modelo puxa tudo para o meio.** O viés vai de +9,0% no quintil mais barato
-  a −14,8% no mais caro, trocando de sinal monotonicamente. O topo é a pior faixa
-  (20,4% de erro mediano) contra 14,1% no centro.
-- **`bairro` e `area_util` sozinhos valem 0,42 dos 0,61 de importância total.**
+- **O modelo puxa tudo para o meio.** O viés vai de +7,6% no quintil mais barato
+  a −14,9% no mais caro, trocando de sinal monotonicamente. O topo é a pior faixa
+  (19,7% de erro mediano) contra 13,5% no centro.
+- **`bairro` e `area_util` sozinhos valem 0,44 dos 0,64 de importância total.**
   28 dos 75 atributos têm importância indistinguível de zero.
 - **Correlação não é importância.** `com_lavabo` é a 11ª maior correlação com o
   preço e vale zero para o modelo; `bairro_bessa` tem correlação 0,012 e é uma
@@ -147,9 +147,9 @@ depende. Três resultados:
   proxy; a segunda só funciona em interação — que é por que o boosting ganha do
   Ridge.
 
-A análise também expôs dois problemas de dado. Os 15 anúncios abaixo de R$ 50 mil
-erram +116% na mediana porque não são preços de venda (R$ 603/m² contra uma
-mediana de R$ 8.871/m²) — registrado, ainda não tratado. O outro foi corrigido:
+A análise também expôs dois problemas de dado. Os 19 anúncios abaixo de R$ 50 mil
+erram +83% na mediana porque não são preços de venda (R$ 603/m² contra uma
+mediana de R$ 9.045/m²) — registrado, ainda não tratado. O outro foi corrigido:
 ver abaixo. Detalhes: §9 de [docs/modelagem.md](docs/modelagem.md).
 
 ### Etapa 4c — canonização dos bairros
@@ -162,17 +162,20 @@ endereço e inventava bairros como `avenida`, `doutor` e `telegrafista`; e nomes
 não-canônicos.
 
 A correção lê a estrutura do endereço — que difere entre os dois portais — e casa
-contra os 69 nomes oficiais de `neighborhoods.csv` por conjunto de tokens, com o
-nome **mais específico** vencendo. Nunca inventa: o que não casa vira
-`nao_informado`, e sobraram 8 anúncios (0,05%).
+contra os **64 bairros oficiais** de João Pessoa por conjunto de tokens, com o
+nome mais específico vencendo. Nunca inventa: o que não casa vira
+`nao_informado`, e sobraram 73 anúncios (0,47%) — 8 sem endereço, 5 fora do
+município e 60 em localidades que não são bairros oficiais (Jardim Luna, Novo
+Milênio, Colinas do Sul…), que ficam sem bairro até alguém de conhecimento local
+confirmar a qual bairro pertencem.
 
-**329 valores distintos → 72.** Como `bairro` entra na chave de deduplicação, a
-correção também revelou 575 duplicatas entre portais que antes escapavam: a base
-cai de 16.162 para 15.587 linhas, sem perda de imóvel.
+**329 valores distintos → 59.** Como `bairro` entra na chave de deduplicação, a
+correção também revelou 579 duplicatas entre portais que antes escapavam: a base
+cai de 16.162 para 15.583 linhas, sem perda de imóvel.
 
 Medido em A/B sobre as mesmas linhas e folds: CV **0,2144 → 0,2097**, com os 5
-folds concordando. E a matriz depois do one-hot cai de 349 para 131 colunas, com
-o modelo melhor.
+folds concordando; a lista oficial levou a 0,2085. E a matriz depois do one-hot
+cai de 349 para 131 colunas, com o modelo melhor.
 
 Por que a extração via LLM do zap continua pendente — e por que completá-la
 provavelmente não vale a pena:
