@@ -20,7 +20,8 @@ Projeto-Aprendizagem-Maquina/
 ├── scripts/          utilitários de linha de comando (.bat)
 ├── src/imoveis_jp/   o pacote Python do projeto
 │   ├── config.py     caminhos canônicos — todo I/O de dados passa por aqui
-│   ├── scraping/     coleta (chaves_na_mao: parser, scraper, merge_parts)
+│   ├── scraping/     coleta — chaves_na_mao (parser, scraper, merge_parts)
+│   │                 e zap_imoveis (scraper, extractor, storage, tracker…)
 │   ├── processing/   limpeza e normalização raw → processed
 │   ├── features/     engenharia de atributos / EDA
 │   └── models/       treino e avaliação
@@ -57,7 +58,9 @@ efeito é imediato, sem reinstalar e sem gambiarra de `sys.path`.
 
 | O quê | Comando (com `.venv\Scripts\python.exe`) |
 |---|---|
-| Coletar anúncios | `-m imoveis_jp.scraping.chaves_na_mao.scraper` |
+| Coletar anúncios (chaves na mão) | `-m imoveis_jp.scraping.chaves_na_mao.scraper` |
+| Coletar anúncios (zapimóveis) | `-m imoveis_jp.scraping.zap_imoveis` |
+| Fundir as partes dos workers do zap | `-m imoveis_jp.scraping.zap_imoveis --merge` |
 | Ver o plano sem baixar | `-m imoveis_jp.scraping.chaves_na_mao.scraper --dry-run` |
 | Coletar em paralelo (3 workers) | `scripts\run_parallel.bat` |
 | Fundir as partes do paralelo | `-m imoveis_jp.scraping.chaves_na_mao.merge_parts` |
