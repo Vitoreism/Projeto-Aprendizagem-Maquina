@@ -13,15 +13,15 @@
 |---|---|
 | Tipo | Regressão |
 | Alvo | `log(preco_venda)` |
-| Observações | 15.408 anúncios com preço |
-| Imóveis físicos distintos | 14.099 |
-| Features | 75 na matriz → 131 depois do one-hot dentro do `Pipeline` |
+| Observações | 15.301 anúncios com preço |
+| Imóveis físicos distintos | 14.022 |
+| Features | 76 na matriz → 132 depois do one-hot dentro do `Pipeline` |
 | Semente | `42`, em `dataset.SEMENTE` |
 
 O alvo vai para log porque a distribuição em reais tem **assimetria 5,92 e curtose
-80,4**: a mediana é R$ 575 mil e o máximo R$ 19,8 milhões, então um punhado de
+80,4**: a mediana é R$ 580 mil e o máximo R$ 19,8 milhões, então um punhado de
 imóveis de altíssimo padrão domina o erro quadrático das 16 mil observações. Em
-log a assimetria cai para −0,44. As métricas são reconvertidas para reais na
+log a assimetria cai para −0,32. As métricas são reconvertidas para reais na
 avaliação, porque é nelas que a resposta faz sentido.
 
 ---
@@ -40,7 +40,7 @@ A assinatura do imóvel é `(preço arredondado ao milhar, área, quartos, banhe
 garagens)`. Anúncio sem preço ou sem área não tem assinatura utilizável e vira
 grupo próprio, em vez de se juntar a um grupo gigante de nulos.
 
-Resultado: **12.322 no treino, 3.086 no teste, 0 grupos dos dois lados.** O
+Resultado: **12.214 no treino, 3.087 no teste, 0 grupos dos dois lados.** O
 `train.py` verifica isso a cada execução e aborta se não for zero.
 
 ---
@@ -50,7 +50,7 @@ Resultado: **12.322 no treino, 3.086 no teste, 0 grupos dos dois lados.** O
 ```
 ColumnTransformer
 ├── numéricas (8):   SimpleImputer(mediana, add_indicator) → StandardScaler
-├── binárias (62):   passthrough
+├── binárias (63):   passthrough
 └── nominais (5):    OneHotEncoder(min_frequency=30,
                                    handle_unknown='infrequent_if_exist')
 ```
@@ -116,21 +116,21 @@ de modelo.
 
 | Modelo | CV MAE (log) | Teste MAE | Erro % mediano | R² (log) |
 |---|---|---|---|---|
-| **Gradient Boosting ajustado** | **0,2057 ± 0,0041** | **R$ 164.529** | **15,4%** | **0,887** |
-| Gradient Boosting (padrão) | 0,2169 ± 0,0033 | R$ 171.596 | 16,8% | 0,881 |
-| Ridge | 0,2673 ± 0,0020 | R$ 250.871 | 21,1% | 0,821 |
-| Baseline (mediana) | 0,6381 ± 0,0053 | R$ 427.716 | 42,2% | −0,004 |
+| **Gradient Boosting ajustado** | **0,1988 ± 0,0030** | **R$ 170.150** | **15,6%** | **0,897** |
+| Gradient Boosting (padrão) | 0,2076 ± 0,0056 | R$ 172.892 | 16,1% | 0,892 |
+| Ridge | 0,2551 ± 0,0022 | R$ 249.200 | 19,1% | 0,844 |
+| Baseline (mediana) | 0,6183 ± 0,0024 | R$ 443.793 | 43,1% | −0,002 |
 
 O baseline existe como piso de sanidade: prever sempre a mediana. Seu R² de
 −0,001 confirma que a montagem está correta — um baseline honesto tem que ficar
 em torno de zero.
 
-O gradient boosting ajustado erra **15,4% na mediana**. Para um imóvel de R$ 575 mil, isso
+O gradient boosting ajustado erra **15,6% na mediana**. Para um imóvel de R$ 580 mil, isso
 é uma faixa de cerca de R$ 100 mil — aceitável para triagem, insuficiente para
 avaliação individual. O desvio da CV é pequeno (±0,004) frente à diferença entre
-os modelos (0,07), então a vantagem sobre o Ridge é real, não ruído de partição.
+os modelos (0,06), então a vantagem sobre o Ridge é real, não ruído de partição.
 
-A distância entre Ridge e boosting (0,057) indica relações não-lineares e interações
+A distância entre Ridge e boosting (0,056) indica relações não-lineares e interações
 relevantes — provavelmente entre área, bairro e padrão de acabamento.
 
 ---
@@ -154,7 +154,7 @@ relevantes — provavelmente entre área, bairro e padrão de acabamento.
   `error_score="raise"` e aborta se algum score não for finito.
 - **O early stopping usa uma validação interna não agrupada.** O
   `HistGradientBoostingRegressor` liga `early_stopping='auto'` sozinho acima de
-  10.000 amostras — temos 12.322 — e separa 10% para decidir quando parar. Essa
+  10.000 amostras — temos 12.214 — e separa 10% para decidir quando parar. Essa
   fatia é sorteada **aleatoriamente**, não pela assinatura do imóvel, então pode
   conter cópia de uma linha de treino e fazer o modelo parar um pouco tarde. O
   efeito é limitado (decide só o momento de parada, não seleção de atributos),
@@ -359,6 +359,29 @@ numa amostra de dois casos — mas registra que "o ganho da busca é sempre
 otimista" é tendência, não lei, e que o teste continua sendo a única forma de
 saber qual dos dois aconteceu.
 
+### 8.7 Quarta passada: a primeira vez que a grade estava bem-posta
+
+O descarte dos repasses (§9.10) mudou a base de novo, então o eixo que já caiu na
+borda três vezes foi remedido antes de qualquer conclusão:
+
+```
+1 → 0,1998   2 → 0,1997   3 → 0,1989   5 → 0,1998
+8 → 0,2006  10 → 0,2022  15 → 0,2024  20 → 0,2033
+```
+
+Pela primeira vez a curva sobe dos **dois** lados: o mínimo está em 3, interior, e
+não encostado numa ponta. Não há grade para estender.
+
+**E não há motivo para mudar nada.** O valor em produção é 5, a 0,0009 do mínimo
+— e 1, 2, 3 e 5 cabem todos dentro desses mesmos 0,0009. É região plana, não
+diferença; o limiar de 0,005 do projeto está cinco vezes acima disso. Trocar 5
+por 3 seria perseguir a quarta casa decimal de uma partição específica.
+
+Fica a regra, que já valia três passadas atrás e agora tem contraexemplo: **quando
+a base muda, as bordas da grade precisam ser reavaliadas** — o ótimo se move com
+os dados. A novidade é que remedir também pode concluir *nada a fazer*, e essa é
+uma resposta tão boa quanto as outras.
+
 ---
 
 ## 9. Análise de resíduos e importância por permutação
@@ -375,22 +398,29 @@ atributo**. É leitura, não decisão.
 ### 9.1 Os resíduos estão centrados
 
 ```
-média = −0,0036   mediana = −0,0007   desvio = 0,2854   assimetria = +0,03
+média = −0,0004   mediana = +0,0094   desvio = 0,2674   assimetria = −0,20
 ```
 
 Em log, a mediana do resíduo é praticamente zero: o modelo não tem viés global.
-A assimetria residual de +0,03 é o que sobrou da assimetria 5,92 do alvo em
+A assimetria residual de −0,20 é o que sobrou da assimetria 5,92 do alvo em
 reais — a transformação log fez praticamente todo o trabalho.
+
+A assimetria era +0,03 antes da limpeza da §9.10 e virou −0,20 depois. Vale
+registrar que **não tenho explicação isolada para o sinal**: os 107 anúncios
+removidos eram super-previstos (resíduo negativo), e tirá-los deveria empurrar a
+distribuição para o lado oposto. Como o conjunto de teste também mudou, os dois
+efeitos se misturam e não dá para separá-los sem um A/B que não vale o custo
+para uma quantidade dessa magnitude. Fica o número, sem história por cima.
 
 ### 9.2 Onde o modelo erra: nas duas pontas, não só no topo
 
 | Faixa de preço | n | Preço mediano | Viés | Erro mediano | MAE |
 |---|---|---|---|---|---|
-| Q1 (mais barato) | 618 | R$ 180 mil | +7,8% | 16,8% | R$ 50 mil |
-| Q2 | 627 | R$ 406 mil | +8,5% | **13,6%** | R$ 79 mil |
-| Q3 | 612 | R$ 589 mil | +1,9% | 14,2% | R$ 103 mil |
-| Q4 | 620 | R$ 804 mil | −3,9% | 14,0% | R$ 145 mil |
-| Q5 (mais caro) | 609 | R$ 1,4 mi | **−15,2%** | **20,1%** | R$ 450 mil |
+| Q1 (mais barato) | 627 | R$ 180 mil | +7,9% | 15,4% | R$ 44 mil |
+| Q2 | 612 | R$ 406 mil | +8,7% | 14,5% | R$ 81 mil |
+| Q3 | 615 | R$ 590 mil | +1,3% | **13,6%** | R$ 103 mil |
+| Q4 | 615 | R$ 807 mil | −4,1% | 15,0% | R$ 155 mil |
+| Q5 (mais caro) | 618 | R$ 1,45 mi | **−14,3%** | **19,1%** | R$ 469 mil |
 
 O viés troca de sinal monotonicamente do Q1 ao Q5: **o modelo puxa tudo para o
 meio.** É a regressão à média clássica de um estimador que minimiza erro — ele
@@ -405,13 +435,14 @@ regressão à média. Diagnosticar só pelo gráfico clássico esconderia o efei
 
 Consequência prática: a previsão do modelo não deve ser lida como estimativa
 pontual de um imóvel de alto padrão. Nesse segmento ela é sistematicamente
-conservadora, em cerca de 15%.
+conservadora, em cerca de 14%.
 
 Eu previa que o erro se concentraria no alto padrão, onde os dados são esparsos.
-Certo em parte. O Q5 é de longe o pior (20,1% contra 13,6% no melhor quintil). O Q1 era
-quase tão ruim quanto — mas deixou de ser depois que os bairros foram
-canonizados (§9.7): caiu de 20,0% para 16,8%, porque boa parte do erro ali não
-era escassez de dado, era bairro errado.
+Certo em parte. O Q5 é de longe o pior (19,1% contra 13,6% no melhor quintil). O Q1 era
+quase tão ruim quanto — mas deixou de ser em duas etapas: a canonização dos
+bairros (§9.7) levou de 20,0% para 16,8%, e a limpeza dos repasses (§9.10) de
+16,8% para **15,4%**. Quase todo o erro do quintil mais barato era dado errado,
+não escassez de dado. Hoje o Q1 é o segundo **melhor** quintil.
 
 O erro em reais, esse sim, cresce monotonicamente: R$ 50 mil no Q1 contra R$ 450
 mil no Q5. Para triagem em massa a leitura relevante é a percentual; para decidir
@@ -425,27 +456,27 @@ construção). Unidade: quanto o MAE em log piora ao embaralhar a coluna.
 
 | Atributo | Importância | Desvio |
 |---|---|---|
-| `bairro` | **+0,2580** | 0,0043 |
-| `area_util` | **+0,1797** | 0,0054 |
-| `garagens` | +0,0655 | 0,0030 |
-| `suites` | +0,0271 | 0,0025 |
-| `origem_anuncio` | +0,0222 | 0,0014 |
-| `quartos` | +0,0158 | 0,0008 |
-| `condominio` | +0,0152 | 0,0011 |
-| `banheiros` | +0,0098 | 0,0008 |
-| `area_total` | +0,0081 | 0,0008 |
-| `com_varanda_gourmet` | +0,0054 | 0,0006 |
+| `bairro` | **+0,2160** | 0,0033 |
+| `area_util` | **+0,2058** | 0,0041 |
+| `garagens` | +0,0702 | 0,0031 |
+| `suites` | +0,0209 | 0,0012 |
+| `condominio` | +0,0137 | 0,0014 |
+| `venda_direta` | +0,0132 | 0,0010 |
+| `origem_anuncio` | +0,0125 | 0,0011 |
+| `quartos` | +0,0096 | 0,0008 |
 
-Localização e tamanho respondem por **0,44 dos 0,65** de importância total.
-Embaralhar `bairro` sozinho piora o MAE em 0,2580, mais do que o MAE final
-inteiro (0,2062) — sem bairro o modelo é pior que inútil.
+Localização e tamanho respondem por **0,42 dos 0,61** de importância total.
+Embaralhar `bairro` sozinho piora o MAE em 0,2160, mais do que o MAE final
+inteiro (0,2002) — sem bairro o modelo é pior que inútil.
 
-A distância entre os dois cresceu depois da canonização (§9.7): `bairro` subiu
-de +0,2226 para +0,2580 e `area_util` caiu de +0,2001 para +0,1797. Faz sentido
-— parte do sinal de localização estava perdida em rótulo errado, e o modelo a
-compensava pela área.
+A distância entre os dois oscilou com as correções de dado: a canonização (§9.7)
+levou `bairro` de +0,2226 a +0,2580 e derrubou `area_util` de +0,2001 a +0,1797;
+depois a entrada de `venda_direta` (§9.11) devolveu parte disso, com `bairro`
+recuando para +0,2160 e `area_util` voltando a +0,2058. O recuo do bairro é
+esperado e está explicado na §9.11 — a coluna nova absorveu parte do que ele
+carregava sozinho.
 
-**29 dos 75 atributos têm importância indistinguível de zero.** Quase todos são
+**34 dos 76 atributos têm importância indistinguível de zero.** Quase todos são
 comodidades. Isso não significa que comodidade não importe: significa que, dado
 o bairro e a área, ela não acrescenta.
 
@@ -502,6 +533,10 @@ demais. Um piso por **preço/m²** — e não por preço absoluto — pegaria es
 sem descartar imóvel pequeno legitimamente barato. Fica registrado como próximo
 passo; não foi aplicado agora porque mudaria a base sob os números já relatados
 nesta etapa.
+
+> Aplicado depois, na seção **9.10** — onde a investigação mostrou que a hipótese
+> acima estava certa na conclusão e errada na causa: não era erro de digitação,
+> era outro produto vendido com a mesma etiqueta.
 
 Dois outros segmentos, para fechar:
 
@@ -707,3 +742,216 @@ real apareceu em outro lugar: no Q1, onde o erro caiu 2,7 pontos.
 Saídas em `data/processed/`: `residuos_teste.csv`, `residuos_por_segmento.csv`,
 `importancia_permutacao.csv`, `importancia_permutacao_codificada.csv` (esta com o
 `|Spearman|` ao lado, para o confronto de §9.4).
+
+### 9.10 O preço que não era preço
+
+A §9.5 registrou 19 anúncios com erro de +75% e propôs um piso por preço/m².
+Ao abrir os anúncios para escolher o valor do piso, apareceu a causa — e ela não
+era a suposta:
+
+> *"Repasse no Valentina: Chaves R$ 21.500 mil e Parcela Menor que Aluguel (R$ 719)"*
+
+Não é erro de digitação. É **repasse (ágio)**: o anunciante vende a posição dele
+num financiamento, e o valor da etiqueta é o que se paga pelas chaves — o
+comprador ainda assume as parcelas restantes. São dois produtos diferentes com o
+mesmo rótulo `preco_venda`. Mantidos na base, ensinam que um apartamento de dois
+quartos no Gramame vale R$ 22.000.
+
+**Por que o corte não é onde a intuição colocaria.** A distribuição global de
+preço/m² não tem vale: é contínua de R$ 250 a R$ 4.000. Então o piso é escolha,
+não descoberta — e foi calibrado contra um sinal *independente*, a palavra
+"repasse" ou "ágio" no texto do anúncio, que 177 anúncios declaram:
+
+| piso | descartados | declaram repasse | precisão |
+|---|---|---|---|
+| R$ 500 | 31 | 25 | 81% |
+| **R$ 1.000** | **111** | **84** | **76%** |
+| R$ 1.500 | 210 | 104 | 50% |
+| R$ 2.000 | 440 | 111 | 25% |
+
+A precisão desaba entre R$ 1.000 e R$ 1.500. A queda tem nome: ali entra uma
+segunda população, **legítima**. São 311 anúncios de venda direta/leilão da
+Caixa, com preço/m² concentrado entre R$ 1.164 (p05) e R$ 1.899 (p75) — vendas
+reais num regime de preço deprimido, não erro. O piso em R$ 2.000, que a leitura
+ingênua da §9.5 sugeria, teria apagado todas elas.
+
+O piso fica **abaixo** do p05 desse grupo, de propósito. Custo assumido e
+declarado: 21 anúncios de venda direta caem junto, 19% dos descartes. É o preço
+de não fazer uma regra de validade de dado depender de texto de marketing.
+
+O texto **calibrou** o piso; não filtra nada. Usar "repasse" como filtro
+descartaria anúncio comum que só cita a palavra no rodapé da imobiliária — 78
+dos 177 têm preço/m² acima de R$ 1.250 e são anúncios normais.
+
+#### A área é outro defeito, e pede outro remédio
+
+Nove anúncios têm preço/m² baixo por um motivo diferente: a **área** está errada,
+o preço está certo. É o separador decimal perdido no scrape — 988 m² num anúncio
+cujo próprio título diz *"Vista para o Mar em Manaíra | 98m²"*, e 1.372 m² em
+outro que se anuncia como *"137,20 m² e 3 quartos"*.
+
+Aqui o vale que falta na distribuição global **existe**: entre os 85 anúncios com
+mais de 400 m², o preço/m² pula de R$ 1.666 para R$ 3.288 sem nada no meio.
+Qualquer limiar entre 1.700 e 3.200 separa os mesmos nove anúncios.
+
+Os dois lados do vale são reconhecíveis. Abaixo: 1.280 m² de 3 quartos em Tambaú
+por R$ 550.000. Acima: coberturas de 5 quartos no Cabo Branco e no Miramar, de
+664 e 1.260 m², por R$ 11 e R$ 19,8 milhões — que são **reais**. Um teto absoluto
+de área mataria justamente os imóveis mais caros da base. Por isso a regra olha o
+par (área, preço/m²), nunca a área sozinha.
+
+O remédio também difere: aqui **anula-se a área**, não a linha. O preço de
+R$ 1.019.334 no Jardim Oceania é dado bom; só a área de 984 m² é que é 98,4.
+
+E a ordem importa. A regra da área roda **antes** do piso: sem área, esses
+anúncios deixam de ter preço/m² e saem da mira do descarte seguinte — que é o
+que se quer, porque o problema deles nunca foi o preço. Rodando na ordem
+inversa, os R$ 550.000 de Tambaú sairiam da base junto com a área errada.
+
+Ambas as regras rodam **depois** do enriquecimento pela descrição: se o pipeline
+recupera "98 m²" do texto, a regra nem precisa disparar. Julgar antes puniria o
+anúncio que o próprio pipeline ia consertar.
+
+#### O ganho é quase todo ilusório, e mesmo assim vale
+
+A base foi de 15.583 para **15.476** linhas (107 descartes, 9 áreas anuladas) e o
+número relatado melhorou bastante:
+
+| | antes | depois |
+|---|---|---|
+| CV MAE (log) | 0,2057 | **0,1998** |
+| R² (log) | 0,887 | **0,895** |
+
+Mas **esses dois números não são comparáveis**: mudaram a base *e* o conjunto de
+teste. A pergunta que importa — a presença do ágio no treino piora a previsão dos
+anúncios legítimos? — exige avaliar os dois modelos nas mesmas linhas.
+
+Split calculado uma vez sobre as 15.292 linhas idênticas nas duas bases, mesmo
+teste de 3.087 anúncios, única diferença sendo os 107 de ágio no treino de A:
+
+| | CV | teste MAE(log) | erro mediano | R² |
+|---|---|---|---|---|
+| A: com ágio no treino | 0,2091 | 0,2035 | 15,37% | 0,8925 |
+| B: sem ágio no treino | 0,2002 | **0,2005** | 15,47% | **0,8971** |
+
+O efeito real é **+0,0031** de MAE(log) e **+0,0046** de R². O erro mediano fica
+0,10 p.p. *pior*, o que é ruído. Ou seja: dos 0,0059 de melhora relatada, cerca
+de metade é o modelo prevendo melhor e o resto é o conjunto de avaliação ter
+perdido linhas que eram impossíveis por construção.
+
+E 0,0031 **não passa** o limiar de 0,005 do projeto. Então a afirmação correta
+não é "o modelo melhorou": é que **a base ficou certa**. Aqueles 107 anúncios não
+tinham preço de venda para prever, e um modelo julgado por acertá-los estava
+sendo julgado pela pergunta errada.
+
+É a mesma lição da §9.7 pelo avesso. Lá, purificar uma categoria piorou o número
+e o tornou honesto. Aqui, remover registros inválidos melhorou o número — e a
+parte do ganho que é honesta é a menor.
+
+### 9.11 A binária `venda_direta`, e uma previsão minha errada por 10x
+
+A §9.10 deixou registrado que a venda direta/leilão tem regime de preço próprio e
+o modelo não sabia distingui-la. Feita a coluna, com os termos calibrados um a um
+pelo preço/m² do grupo que formam:
+
+| termo | n | preço/m² mediano | veredito |
+|---|---|---|---|
+| `venda direta` | 172 | R$ 1.633 | coerente |
+| `venda online` | 85 | R$ 1.720 | coerente |
+| `caixa economica` | 36 | R$ 4.246 | anúncio comum citando o banco |
+| `aceita fgts` | 65 | R$ 8.600 | anúncio comum |
+| `leilao` | 1 | — | não existe na prática |
+| `matricula` | 259 | R$ 1.668 | 98% redundante (254 já batem em `venda direta`) |
+
+Ficaram só os dois primeiros: **262 anúncios**, preço/m² mediano de R$ 1.665
+contra R$ 9.089 do resto — **18% do mercado**, não um pouco abaixo.
+
+`matricula` merece nota porque quase passou: a distribuição dele é tão apertada
+quanto a dos aprovados. O que o reprovou não foi o preço, foi a sobreposição — os
+cinco anúncios que ele adiciona *sozinho* têm preço/m² de R$ 2.790 a R$ 8.694.
+Um termo pode parecer bom só por concordar com quem já estava certo.
+
+#### A previsão registrada estava errada por uma ordem de magnitude
+
+Registrei antes de rodar: ganho de **0,005 a 0,015** na CV. Medido: **0,0010**.
+
+O que explica o erro está na comparação entre modelos:
+
+| | sem `venda_direta` | com | Δ |
+|---|---|---|---|
+| Gradient Boosting | 0,1998 | 0,1988 | −0,0010 |
+| Ridge | 0,2596 | 0,2551 | **−0,0045** |
+
+O Ridge ganha **4,5 vezes mais**. O motivo é que o boosting já sabia: essas
+unidades se concentram em Gramame, Paratibe, Cuiá e Indústrias, e uma árvore
+reconstrói "apartamento pequeno *naquele* bairro *com* aquele condomínio" a
+partir de `bairro` × `area_util` sem precisar da coluna. O modelo linear não
+consegue — para ele, interação só existe se alguém escrever.
+
+Eu previ o ganho do modelo que **não** tinha como já saber.
+
+#### Importância alta, ablação baixa — e isso não é contradição
+
+`venda_direta` é a **6ª feature mais importante** das 76 por permutação
+(+0,0132 ± 0,0010, treze desvios acima de zero) e mesmo assim removê-la custa
+0,0010. As duas medidas respondem perguntas diferentes:
+
+- **permutação** quebra a coluna com o modelo já treinado esperando por ela → mede *dependência*;
+- **ablação** treina de novo sem ela → mede *insubstituibilidade*.
+
+A diferença entre as duas **é** a redundância. Confirmação direta: a importância
+de `bairro` caiu de 0,2394 para 0,2160 quando `venda_direta` entrou — a coluna
+nova absorveu parte do que o bairro carregava sozinho.
+
+Fica a regra: importância por permutação alta **não** justifica manter uma
+feature. Só a ablação responde isso.
+
+#### O ganho está onde eu não esperava
+
+Ablação com as mesmas linhas e folds, separando o teste nos 47 anúncios marcados
+e nos outros 3.040:
+
+| | sem | com | Δ |
+|---|---|---|---|
+| **leilão** (n=47) — MAE(log) | 0,1813 | **0,1385** | −0,0428 |
+| **leilão** — erro mediano | 15,98% | **12,57%** | −3,4 p.p. |
+| **leilão** — viés | +11,4% | **+4,1%** | ⅔ a menos |
+| **resto** (n=3.040) — MAE(log) | 0,2034 | 0,2012 | −0,0022 |
+
+O efeito por anúncio é 19 vezes maior no segmento, como esperado. Mas os 3.040
+são 65 vezes mais numerosos, e a conta do ganho global se inverte:
+
+```
+segmento:  47 × 0,0428 = 2,01   (23%)
+resto:  3.040 × 0,0022 = 6,69   (77%)
+```
+
+**77% do ganho vem dos anúncios que não são leilão.** Sem a coluna, os 262
+anúncios a 18% do mercado puxavam para baixo a previsão de todo apartamento
+parecido nos mesmos bairros. Marcar o leilão serve menos para acertar o leilão e
+mais para **parar de contaminar o resto** — que é o argumento que eu não teria
+encontrado olhando só o número global.
+
+Uma limitação honesta: o R² *dentro* do segmento continua negativo (−0,05, contra
+−1,00 sem a coluna). O modelo passou a acertar o **nível** de preço do leilão, mas
+não ordena os imóveis dentro dele. Para 47 anúncios de tamanho parecido em
+bairros parecidos, isso era esperado — e continua sendo uma faixa que o modelo
+não explica, só posiciona.
+
+#### Por que fica, apesar de 0,0010
+
+O ganho global não passa o limiar de 0,005, então não se declara vantagem. Três
+razões independentes sustentam a coluna mesmo assim:
+
+1. **Custa uma coluna** e corta o viés do segmento de +11,4% para +4,1%.
+2. **Torna o segmento auditável.** Sem ela, o desconto de 82% fica implícito
+   dentro de interações que ninguém consegue inspecionar.
+3. **É pré-requisito da comparação da Etapa 5.** Sem essa coluna, parte da
+   distância entre boosting e modelos lineares é apenas *"o boosting consegue
+   inferir `venda_direta` sozinho e o Ridge não"* — os 0,0045 acima medem
+   exatamente esse pedaço. Comparar famílias de modelo sem ela seria creditar ao
+   algoritmo um ponto que pertence à engenharia de atributos.
+
+A razão 3 é a que mais importa agora, e vale como aviso para as issues #20–#25:
+**toda feature que só o modelo não-linear consegue inferir sozinho enviesa a
+comparação a favor dele.**
