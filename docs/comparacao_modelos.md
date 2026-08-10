@@ -104,6 +104,17 @@ perder na CV — sinal de alta variância (a árvore memoriza o treino, ver
 `docs/modelos/arvore.md`), não de que a CV escolheu errado: o critério nunca
 comparou árvore contra Ridge por essa métrica.
 
+**Um alerta sobre o que estas linhas comparam.** Cada candidato entra na
+configuração que o próprio dono registrou, e essas configurações não estão no mesmo
+estágio de ajuste: `ridge` e `gradient_boosting_ajustado` trazem a vencedora do
+`GridSearchCV` (`melhores_hiperparametros.json`), enquanto `arvore_decisao`, `knn` e
+`mlp` trazem a configuração inicial dos seus donos — a busca deles está documentada,
+mas não foi inscrita. Uniformizar isso exigiria rodar `tune.py` para os três, o que
+é barato para árvore e KNN e proibitivo para a MLP (216 configurações × 5 folds).
+Enquanto não for feito, a leitura correta desta tabela é **"cada modelo como foi
+inscrito"**, não "cada modelo no seu melhor" — e a diferença é material para a
+árvore, que podada chegaria a 0,2450.
+
 ---
 
 ## 5. Variante PCA
@@ -172,7 +183,7 @@ desta comparação.
 | **gradient_boosting_ajustado** | 0,1988 | [`gradient_boosting.md`](modelos/gradient_boosting.md) | Vencedor. Interação capturada implicitamente por cortes em sequência; ganho do ajuste de hiperparâmetros sobre o padrão é pequeno (4,2%) frente à distância para o linear — a família do modelo importa mais que o tuning. |
 | ridge | 0,2551 | [`ridge.md`](modelos/ridge.md) | Busca de `alpha` devolveu o próprio default — o gargalo é forma funcional aditiva, não falta de regularização. |
 | ols | 0,2551 | [`ols.md`](modelos/ols.md) | Estatisticamente indistinguível de Ridge (diferença na 5ª casa) — a colinearidade do one-hot não estava inflando coeficientes o bastante para a regularização importar. |
-| arvore_decisao | 0,2846 | [`arvore.md`](modelos/arvore.md) | `max_depth=None` memoriza o treino quase por completo (MAE treino R$2.153); podada por `ccp_alpha`/`min_samples_leaf`, é o modelo mais explicável do grupo, com o custo de ficar atrás dos outros cinco na CV. |
+| arvore_decisao | 0,2846 | [`arvore.md`](modelos/arvore.md) | **A configuração registrada é a sem poda** (`max_depth=None`), e é ela que produz este 0,2846: memoriza o treino quase por completo (MAE treino R$ 2.153) e fica atrás dos outros cinco na CV. Isso é deliberado — é a curva de overfitting o entregável didático da issue #21. A configuração **podada** vencedora do `GridSearchCV` (`ccp_alpha=5e-5`, `min_samples_leaf=5`) chega a **0,2450** e ficaria à frente de Ridge/OLS, mas **não** está inscrita no candidato e por isso não aparece nesta tabela. Os dois números estão medidos em `arvore.md` §3 e §4. |
 | mlp | 0,3162 | [`mlp.md`](modelos/mlp.md) | Supera a baseline nula com folga, mas sofre em matriz esparsa tabular — otimização por gradiente em 63 binárias ruidosas converge pior que cortes ortogonais de árvore/boosting. |
 | knn | 0,3202 | [`knn.md`](modelos/knn.md) | Pior dos seis. A própria hipótese previu esse desfecho como diagnóstico: maldição da dimensionalidade — distância euclidiana em 132 colunas majoritariamente binárias deixa de discriminar "imóvel parecido" de "imóvel do mesmo bairro". |
 
@@ -215,3 +226,48 @@ coerente com o que os modelos já mostravam. A vantagem do boosting continua
 parcialmente explicada por engenharia de atributos implícita (interação
 bairro×área ainda não explícita na matriz), registrada como trabalho futuro, não
 como falha desta comparação.
+
+---
+
+## 10. Nota de reprodutibilidade — os números desta página dependem do ambiente
+
+Rodando o **Ridge** (solução fechada, portanto determinístico dado o mesmo input)
+numa máquina diferente da que produziu esta issue, com o mesmo commit e a mesma
+`features_matrix.csv`:
+
+```
+folds reproduzidos noutra máquina : 0,2486 · 0,2585 · 0,2588 · 0,2513 · 0,2594   (média 0,25532)
+folds commitados nesta issue      : 0,2575 · 0,2581 · 0,2536 · 0,2535 · 0,2530   (média 0,25512)
+```
+
+O split é idêntico (12.214/3.087) e o estimador não tem aleatoriedade — logo o que
+mudou foram as **folds**, não o modelo. A causa é que `requirements.txt` declara
+`scikit-learn>=1.3.0`, sem fixar versão, e o particionamento do `GroupKFold` não é
+estável entre versões da biblioteca. Corrobora isso o fato de a reprodução coincidir
+com a rodada anterior do projeto (commit `5f862b1`, Ridge 0,25532).
+
+**O que isso afeta e o que não afeta.** O deslocamento máximo observado entre as duas
+execuções é de **0,0013** (`gradient_boosting_ajustado` 0,1988 ↔ 0,2002), contra um
+limiar de decisão de 0,005 e uma distância de 0,056 entre o vencedor e o segundo
+colocado. **O ranking, o critério e a conclusão da seção 3 são idênticos nas duas
+execuções.** O que fica frágil é a tabela **fold a fold** da seção 2 — que é
+justamente a evidência da regra "cinco de cinco folds a favor": ela vale para o
+ambiente em que foi gerada.
+
+**Consequência prática, até que as versões sejam fixadas:**
+
+1. A tabela oficial é a desta issue (`resultados_modelos.csv` + `cv_mae_por_fold.csv`).
+   **Não misture números de execuções diferentes na mesma tabela** — foi o que produziu
+   as divergências corrigidas em `docs/modelos/mlp.md`.
+2. Quem rerodar `train.py` vai obter números levemente diferentes destes, e isso **não
+   é** regressão do modelo.
+3. A correção definitiva é trocar `>=` por `==` em `requirements.txt` e rerodar a
+   cadeia inteira uma vez (`train.py → decisao.py → pca_variant.py`). Não foi feito
+   aqui porque mudaria todos os números já publicados no README e em
+   `modelagem.md`/`protocolo_comparacao.md`, o que é uma issue própria e não uma
+   correção de documentação.
+
+A regra 1 do protocolo — "mesmo split, mesmas folds, mesmo `Pipeline`" — é garantida
+por semente para o split, mas **não** para a versão da biblioteca. O
+`test_candidato_e_reprodutivel` verifica `random_state`; nenhum teste verifica
+ambiente.

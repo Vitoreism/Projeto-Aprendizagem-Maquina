@@ -23,8 +23,11 @@ RAW = DATA / "raw"
 INTERIM = DATA / "interim"
 PROCESSED = DATA / "processed"
 
-#: Arquivo canônico do scrape (todos os workers convergem para ele).
+#: Arquivo canônico do scrape do chavesnamao (todos os workers convergem para ele).
 ANUNCIOS_JSON = RAW / "imoveis_joao_pessoa.json"
+
+#: Arquivo canônico do scrape do zapimoveis (idem, para os workers do zap).
+ANUNCIOS_ZAP_JSON = RAW / "imoveis_joao_pessoa_zap.json"
 
 #: Arquivo intermediário de extrações via LLM (Groq).
 EXTRACTIONS_JSON = INTERIM / "extractions_llm.json"
