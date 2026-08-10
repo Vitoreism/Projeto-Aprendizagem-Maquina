@@ -51,6 +51,13 @@ python -m venv .venv
 O `-e .` instala o pacote em modo editável: você edita `src/imoveis_jp/` e o
 efeito é imediato, sem reinstalar e sem gambiarra de `sys.path`.
 
+> **Já tem o `.venv` de antes?** O dashboard trouxe duas dependências novas
+> (`streamlit` e `plotly`). Rode `.\.venv\Scripts\python.exe -m pip install -e .`
+> de novo para pegá-las.
+
+No **Linux/WSL** troque `.\.venv\Scripts\python.exe` por `.venv/bin/python` em
+todos os comandos deste README.
+
 ---
 
 ## Comandos
@@ -73,24 +80,57 @@ efeito é imediato, sem reinstalar e sem gambiarra de `sys.path`.
 | t-SNE 2D (EDA) | `-m imoveis_jp.features.tsne_exploracao` |
 | Rodar os testes | `-m pytest` |
 
-### Dashboard
+Detalhes do scrape (retomada, sharding, flags, ética/robots.txt): [docs/scraping.md](docs/scraping.md).
+
+---
+
+## Dashboard
+
+Comparação visual dos modelos, para apresentação e para explorar os resultados.
 
 ```powershell
 .\.venv\Scripts\python.exe -m streamlit run app.py
 ```
 
-Abre em `http://localhost:8501`. Sete abas: o veredito da comparação (com o teste
-atrás de um botão, porque a decisão é fechada antes), comparação por fold, variante
-PCA, resíduos, importância por permutação, t-SNE, e uma aba para prever um imóvel —
-preenchendo os campos à mão ou sorteando um dos 3.087 anúncios reais do conjunto de
-teste, que o modelo nunca viu no treino.
+```bash
+# Linux/WSL
+.venv/bin/python -m streamlit run app.py
+```
 
-O app só lê os artefatos de `data/processed/`; ele não re-treina a comparação. Se um
-artefato faltar, a aba diz qual comando o gera. O modelo vencedor é reajustado uma
-vez na inicialização (~10s) em vez de vir de um `.joblib` versionado, que poderia
-divergir em silêncio do código.
+Abre sozinho em `http://localhost:8501`. Para parar: `Ctrl+C` no terminal.
 
-Detalhes do scrape (retomada, sharding, flags, ética/robots.txt): [docs/scraping.md](docs/scraping.md).
+### O que tem em cada aba
+
+| Aba | O que mostra |
+|---|---|
+| **O veredito** | O critério declarado antes de rodar, o ranking de CV, a comparação pareada fold a fold e o vencedor. O resultado do teste fica **atrás de um botão** — a decisão é fechada antes de olhar o teste, e a interface encena essa regra. |
+| **Por fold** | Os seis candidatos nas mesmas cinco partições. É o que torna a condição "todas as folds a favor" verificável a olho. |
+| **PCA** | Sem PCA → com PCA para cada modelo, ligados por uma linha. Piorou nos seis. |
+| **Resíduos** | Onde o modelo erra: previsto × real, distribuição do resíduo, e erro por bairro / faixa de preço / origem. |
+| **Importância** | Importância por permutação, e o confronto contra a correlação — onde os dois discordam está o achado mais interessante do projeto. |
+| **t-SNE** | Projeção 2D colorida por faixa de preço. É EDA: não entrou em modelo nenhum. |
+| **Prever um imóvel** | Dois modos: preencher os campos à mão, ou **sortear um dos 3.087 anúncios reais do conjunto de teste** — imóveis que o modelo nunca viu — mostrando previsão × preço real × erro, com link para o anúncio. |
+
+### Pré-requisitos e comportamento
+
+O app **só lê** os artefatos de `data/processed/`; ele não re-treina a comparação
+(o MLP sozinho leva ~20 min, e a issue #25 exige que os números venham de uma
+rodada única). Todos os artefatos já estão versionados, então ele funciona logo
+após o clone. Se algum faltar, a aba diz qual comando o regenera em vez de
+estourar erro.
+
+Duas escolhas que explicam o comportamento:
+
+- **O modelo vencedor é reajustado na inicialização** (~10s, uma vez, em cache),
+  em vez de vir de um `.joblib` versionado — um binário no repositório poderia
+  divergir em silêncio do código que o gerou.
+- **A previsão nunca aparece como número seco.** Vem com a faixa empírica de erro
+  medida no teste (p10 −27,1%, p90 +36,9%) e avisos quando a entrada sai do
+  território conhecido. Com erro mediano de 15,6%, um valor cravado seria
+  precisão falsa.
+
+O tema está fixo em claro: é a superfície contra a qual a paleta dos gráficos foi
+validada (contraste, banda de luminosidade e separação para daltonismo).
 
 ---
 
