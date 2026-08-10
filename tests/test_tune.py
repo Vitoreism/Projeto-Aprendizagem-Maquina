@@ -9,7 +9,7 @@ devolver `nan` silenciosamente.
 
 from sklearn.model_selection import GroupKFold
 
-from imoveis_jp.models import dataset, train, tune
+from imoveis_jp.models import candidatos, dataset, train, tune
 
 
 def _buscas():
@@ -35,20 +35,38 @@ def test_busca_otimiza_o_erro_absoluto():
         assert busca.scoring == "neg_mean_absolute_error"
 
 
-def test_grades_referem_o_passo_do_regressor_no_pipeline():
-    # sem o prefixo 'regressor__' o GridSearchCV não encontra o parâmetro
-    for grade in (tune.GRADE_BOOSTING, tune.GRADE_RIDGE):
-        assert all(chave.startswith("regressor__") for chave in grade)
+# A verificação do prefixo `regressor__` saiu daqui: as grades passaram a viver
+# em `candidatos/*.py`, e o teste foi junto (`test_candidatos.py`), onde cobre
+# todo candidato inscrito em vez de dois nomes fixos.
 
 
 def test_grades_incluem_o_default_do_sklearn():
-    # o ganho da busca só é interpretável se a configuração padrão estiver
-    # dentro da grade, para servir de referência
-    assert 0.1 in tune.GRADE_BOOSTING["regressor__learning_rate"]
-    assert 31 in tune.GRADE_BOOSTING["regressor__max_leaf_nodes"]
-    assert 20 in tune.GRADE_BOOSTING["regressor__min_samples_leaf"]
-    assert 0.0 in tune.GRADE_BOOSTING["regressor__l2_regularization"]
-    assert 1.0 in tune.GRADE_RIDGE["regressor__alpha"]
+    """O ganho da busca só é interpretável se o default estiver dentro da grade.
+
+    Vale para todo candidato, e não só para os dois que existiam quando este
+    teste foi escrito — é `_mae_da_configuracao_padrao` que depende disso: ela
+    lê os defaults do próprio sklearn e procura essa configuração nos
+    resultados. Se a grade não a contém, o ganho sai `nan` no relatório sem
+    ninguém entender por quê.
+
+    A exigência vale só para eixo que está sendo *buscado*. Eixo com um valor
+    único é constante declarada, não busca — e às vezes a constante é
+    deliberadamente diferente do default: `max_iter=[500]` é teto e não alvo,
+    porque o `early_stopping='auto'` para o modelo antes disso. Exigir o default
+    ali proibiria uma decisão que está documentada e é correta.
+    """
+    for nome, candidato in candidatos.descobrir().items():
+        padrao = type(candidato.regressor)()
+        for chave, valores in candidato.grade.items():
+            if len(valores) < 2:
+                continue
+            parametro = chave.replace("regressor__", "")
+            if not hasattr(padrao, parametro):
+                continue
+            assert getattr(padrao, parametro) in valores, (
+                f"'{nome}': o default de '{parametro}' "
+                f"({getattr(padrao, parametro)}) não está na grade {valores}"
+            )
 
 
 def test_busca_reajusta_o_melhor_modelo():
