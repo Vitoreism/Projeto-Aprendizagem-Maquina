@@ -888,16 +888,33 @@ STORAGE_STATE_FILE= os.path.join(DIR_ATUAL, "session_state.json")
 Ou seja, o scraper **grava dados dentro do código** — e é literalmente por isso que
 existe hoje um `imoveis_joao_pessoa_zap.json` dentro de
 `src/imoveis_jp/scraping/zap_imoveis/`. A regra do README é que todo I/O de dados
-passe por `imoveis_jp.config`. São ~4 linhas no `config.py` do zap mais uma
-constante nova (`ANUNCIOS_ZAP_JSON = RAW / "imoveis_joao_pessoa_zap.json"`) em
-`src/imoveis_jp/config.py` — que hoje **não tem** nenhuma constante do zap.
+passe por `imoveis_jp.config`. São **6 constantes mais um `glob`**: as quatro acima,
+`LOG_FILE`/`REPORT_FILE`, e a busca por arquivos de worker em `storage.py` linha 36
+(`glob(os.path.join(DIR_ATUAL, "imoveis_joao_pessoa_zap_*.json"))`) — se mudar a
+saída e deixar o `glob`, a retomada em paralelo passa a procurar as partes na pasta
+errada e falha em silêncio. Mais uma constante nova
+(`ANUNCIOS_ZAP_JSON = RAW / "imoveis_joao_pessoa_zap.json"`) em
+`src/imoveis_jp/config.py`, que hoje **não tem** nenhuma referência ao zap.
 
-**A ressalva honesta:** o custo B não é verificável sem rodar o scraper de verdade
-(precisa de playwright, rede e o site no ar). Dá para garantir que os imports
-resolvem e que os caminhos apontam para onde devem; não dá para garantir uma coleta
-ponta a ponta antes da apresentação. Por isso o **A** é o que eu recomendo agora, com
-o **B** registrado como issue — melhor um scraper no repo com um defeito conhecido e
-documentado do que meio scraper fora dele.
+**B não exige rerodar a coleta.** As duas cópias do JSON são bit a bit idênticas
+(mesmo SHA-256), então apontar para `data/raw/` aponta para o mesmo conteúdo que já
+está lá; e o pipeline a jusante (`extract_llm_features`, `deduplicate_dataset`) já lê
+de `data/raw/`. A cópia dentro de `src/` é órfã — ninguém a consome. Com os caminhos
+corretos, dá para apagar as 189 mil linhas duplicadas de dentro do código-fonte.
+
+A verificação do B roda **offline**, sem rede e sem playwright — o único código que
+lê o caminho é a retomada:
+
+```powershell
+.\.venv\Scripts\python.exe -c "from imoveis_jp.scraping.zap_imoveis.storage import StorageManager; s=StorageManager(); print(s.get_total_collected())"
+```
+
+Se devolver os ~11,8 mil registros já coletados, os caminhos estão certos.
+
+**A ressalva que permanece:** nada disso prova que o scraper *ainda coleta* — seletor
+de página, sessão e rate limit só se verificam com o site no ar. Mas isso não é
+efeito do B: é uma incerteza que já existe hoje, com a coleta de 01/08, e que
+continuaria existindo sem encostar no código.
 
 ---
 
