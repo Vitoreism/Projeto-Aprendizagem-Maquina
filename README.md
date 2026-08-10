@@ -124,10 +124,10 @@ estatística atravessa a fronteira treino/validação. O teste é tocado uma ún
 
 | Modelo | CV MAE (log) | Teste MAE | Erro % mediano | R² (log) |
 |---|---|---|---|---|
-| Gradient Boosting ajustado | 0,2155 | R$ 167.866 | 16,2% | 0,868 |
-| Gradient Boosting (padrão) | 0,2238 | R$ 171.392 | 17,0% | 0,861 |
-| Ridge | 0,2906 | R$ 290.742 | 22,3% | 0,766 |
-| Baseline (mediana) | 0,6531 | R$ 417.354 | 42,5% | −0,001 |
+| Gradient Boosting ajustado | 0,2057 | R$ 164.529 | 15,4% | 0,887 |
+| Gradient Boosting (padrão) | 0,2169 | R$ 171.596 | 16,8% | 0,881 |
+| Ridge | 0,2673 | R$ 250.871 | 21,1% | 0,821 |
+| Baseline (mediana) | 0,6381 | R$ 427.716 | 42,2% | −0,004 |
 
 Metodologia, decisões e limitações: [docs/modelagem.md](docs/modelagem.md).
 
@@ -136,21 +136,50 @@ Metodologia, decisões e limitações: [docs/modelagem.md](docs/modelagem.md).
 `analysis` mede, **no conjunto de teste**, onde o modelo erra e do que ele
 depende. Três resultados:
 
-- **O modelo puxa tudo para o meio.** O viés vai de +6,9% no quintil mais barato
-  a −14,1% no mais caro, trocando de sinal monotonicamente. As duas pontas são as
-  piores faixas (20,0% e 19,5% de erro mediano) contra 13,1% no centro.
-- **`bairro` e `area_util` sozinhos valem 0,42 dos 0,61 de importância total.**
-  24 dos 75 atributos têm importância indistinguível de zero.
+- **O modelo puxa tudo para o meio.** O viés vai de +7,8% no quintil mais barato
+  a −15,2% no mais caro, trocando de sinal monotonicamente. O topo é a pior faixa
+  (20,1% de erro mediano) contra 13,6% no melhor quintil.
+- **`bairro` e `area_util` sozinhos valem 0,44 dos 0,65 de importância total.**
+  29 dos 75 atributos têm importância indistinguível de zero.
 - **Correlação não é importância.** `com_lavabo` é a 11ª maior correlação com o
   preço e vale zero para o modelo; `bairro_bessa` tem correlação 0,012 e é uma
   das dummies mais úteis. A primeira é efeito de área e bairro vazando por uma
   proxy; a segunda só funciona em interação — que é por que o boosting ganha do
   Ridge.
 
-A análise também expôs um problema de dado: os 16 anúncios abaixo de R$ 50 mil
-erram +132% na mediana porque não são preços de venda (R$ 603/m² contra uma
-mediana de R$ 9.019/m²). Detalhes e o que fazer: §9 de
-[docs/modelagem.md](docs/modelagem.md).
+A análise também expôs dois problemas de dado. Os 19 anúncios abaixo de R$ 50 mil
+erram +75% na mediana porque não são preços de venda (R$ 603/m² contra uma
+mediana de R$ 9.045/m²) — registrado, ainda não tratado. O outro foi corrigido:
+ver abaixo. Detalhes: §9 de [docs/modelagem.md](docs/modelagem.md).
+
+### Etapa 4c — canonização dos bairros
+
+**14,0% dos anúncios tinham o bairro errado**, no atributo mais importante do
+modelo. Três defeitos em `extrair_bairro`: casamento por substring na ordem
+errada (511 anúncios do Altiplano Cabo Branco viravam Cabo Branco, bairros com
+26% de diferença de preço/m²); um fallback que devolvia a primeira palavra do
+endereço e inventava bairros como `avenida`, `doutor` e `telegrafista`; e nomes
+não-canônicos.
+
+A correção lê a estrutura do endereço — que difere entre os dois portais — e casa
+contra os **64 bairros oficiais** de João Pessoa por conjunto de tokens, com o
+nome mais específico vencendo. Nunca inventa: o que não casa vira
+`nao_informado`, e sobraram 13 anúncios (0,08%) — 8 sem endereço e 5 fora do
+município.
+
+Sete localidades que não constam da lista oficial (Jardim Luna, Novo Milênio,
+Colinas do Sul…) entraram numa lista à parte, confirmadas por conhecimento local
+e sustentadas pelos dados: Jardim Luna tem CV de preço/m² de 0,23, mais
+homogêneo que o bairro oficial mediano (0,35).
+
+**329 valores distintos → 66.** Como `bairro` entra na chave de deduplicação, a
+correção também revelou 579 duplicatas entre portais que antes escapavam: a base
+cai de 16.162 para 15.583 linhas, sem perda de imóvel.
+
+Medido em A/B sobre as mesmas linhas e folds: CV **0,2144 → 0,2097**, com os 5
+folds concordando. Fechar a lista nos 64 oficiais e reajustar os
+hiperparâmetros sobre a base nova levaram a CV a **0,2057**. E a matriz depois do one-hot
+cai de 349 para 131 colunas, com o modelo melhor.
 
 Por que a extração via LLM do zap continua pendente — e por que completá-la
 provavelmente não vale a pena:

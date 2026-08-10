@@ -20,8 +20,10 @@ variáveis mais preditivas do modelo:
 | `banheiros` | 1,7% | +0,533 |
 | `quartos` | 1,1% | +0,503 |
 
-Dos 16.162 anúncios, **10.656 (65,9%) têm descrição utilizável** — mais de 40
-caracteres.
+Dos 16.162 anúncios da base de então, **10.656 (65,9%) têm descrição utilizável**
+— mais de 40 caracteres. (A canonização dos bairros depois levou a base a 15.583
+linhas, ao revelar duplicatas entre portais; a proporção não muda de forma
+relevante.)
 
 ---
 

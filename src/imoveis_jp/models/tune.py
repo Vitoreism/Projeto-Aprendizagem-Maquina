@@ -71,7 +71,16 @@ GRADE_BOOSTING: Dict[str, List[Any]] = {
     #    2 -> 0,2163    5 -> 0,2154    10 -> 0,2155    20 -> 0,2183    50 -> 0,2263
     #
     # o minimo e interior e fica em 5-10. A grade foi estendida para baixo.
-    "regressor__min_samples_leaf": [5, 10, 20, 50],
+    #
+    # depois da canonizacao dos bairros a base mudou e o eixo foi remedido. 5
+    # voltou a ficar na borda, entao sondamos abaixo de novo:
+    #
+    #    1 -> 0,2059    2 -> 0,2050    3 -> 0,2057    5 -> 0,2057    10 -> 0,2084
+    #
+    # a curva vira em 1, entao o minimo e interior. 2, 3 e 5 estao dentro de
+    # 0,0007 -- regiao plana. 2 e 3 entraram na grade para que isso fique
+    # reproduzivel, e nao so num comentario.
+    "regressor__min_samples_leaf": [2, 3, 5, 10, 20, 50],
     # EIXO MORTO, fixado no default. Na segunda passada a media entre
     # configuracoes deu 0,2234 com l2=0 e 0,2235 com l2=1 -- diferenca na 4a
     # casa. A "vitoria" do 1,0 aparecia so na melhor configuracao (0,2178
