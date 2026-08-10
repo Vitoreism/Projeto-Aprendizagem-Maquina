@@ -71,7 +71,7 @@ Roda em cima de `imoveis_joao_pessoa_global_deduplicated.csv` e produz
 ### 3.1 Reparo das numéricas destruídas
 
 Cada célula não-numérica é reconstruída a partir do JSON bruto, casando por
-`url_anuncio` (a cobertura dos dois JSONs é de 100% das 16.162 linhas):
+`url_anuncio` (a cobertura dos dois JSONs é de 100% das 15.583 linhas):
 
 | Coluna | Células inválidas | Recuperadas |
 |---|---|---|
@@ -178,7 +178,7 @@ de EDA e de relatório.
 
 Alvo principal `preco_venda`, mais `log_preco` e `preco_m2` como alvos auxiliares
 (preço imobiliário é fortemente assimétrico). Descarta os 175 imóveis sem preço;
-restam 15.987 e 99 features candidatas.
+restam 15.408 e 125 features candidatas.
 
 Binária contra alvo contínuo é correlação ponto-bisserial e binária contra
 binária é o coeficiente phi — as duas são a fórmula de Pearson, então uma matriz
@@ -216,7 +216,7 @@ o imóvel. O módulo sinaliza toda feature com |r| ≥ 0,50 contra `origem_anunc
 | `data/processed/features_matrix.csv` | a matriz consolidada, 15.583 × 77 |
 | `data/processed/correlacao_alvo.csv` | ranking de cada feature contra os três alvos |
 | `data/processed/pares_redundantes.csv` | decisões da poda, com o motivo |
-| `data/processed/features_selecionadas.csv` | as 121 features que sobraram (uso de EDA — ver §3.5) |
+| `data/processed/features_selecionadas.csv` | as 123 features que sobraram (uso de EDA — ver §3.5) |
 | `data/interim/relatorio_consolidacao.json` | auditoria da consolidação |
 | `docs/figuras/heatmap_top30.png` | top 30 por correlação com o preço |
 | `docs/figuras/heatmap_completo.png` | matriz das features selecionadas |

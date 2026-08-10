@@ -102,20 +102,35 @@ def montar_modelos(
         # vencedora do GridSearchCV de imoveis_jp.models.tune, fixada aqui para
         # o treino ser reproduzivel sem depender de rodar a busca antes.
         #
-        # min_samples_leaf=10 e um EMPATE resolvido fora da CV, e vale registrar
-        # como tal. A busca devolveu 5 (0,2154) contra 10 (0,2155): 0,0001 de
-        # diferenca, contra um desvio entre folds de 0,0037. Pelo criterio de
-        # decisao do projeto (>= 0,005 para declarar vantagem) isso e empate, e
-        # nenhum dos criterios de desempate -- explicabilidade, custo, numero de
-        # hiperparametros -- separa os dois. O voto de minerva foi o argumento de
-        # dominio ja documentado na grade: preco de imovel tem cauda longa, e
-        # folha maior dificulta a arvore isolar um unico anuncio de alto padrao.
+        # min_samples_leaf=5 substitui o 10 que estava aqui, e a troca merece
+        # explicacao porque a diferenca NAO passa o limiar do projeto.
+        #
+        # A regra de decisao tem duas partes. A primeira diz que vence o menor
+        # MAE da CV -- e e 5 (0,2057 contra 0,2084). A segunda diz quando se
+        # pode DECLARAR vantagem sobre o segundo colocado: >= 0,005. Os 0,0027
+        # daqui nao chegam la, entao o que se ship e o vencedor da CV, mas sem
+        # afirmar que ele e comprovadamente melhor.
+        #
+        # O que sustenta a escolha nao e o duelo, e o eixo inteiro. A media
+        # sobre as 8 configuracoes de cada nivel cai monotonicamente:
+        #
+        #    5 -> 0,2089   10 -> 0,2109   20 -> 0,2126   50 -> 0,2187
+        #
+        # e os 5 folds favorecem 5 contra 10. Isso e efeito sistematico, nao
+        # sorte de uma configuracao. O 10 tinha vindo de um argumento de
+        # dominio (cauda longa, folha maior evita decorar imovel caro); a
+        # medicao contradiz esse prior nesta faixa, e o prior cede.
+        #
+        # Por que 5 e nao 2, que e o minimo da sonda (0,2050): 2, 3 e 5 estao
+        # dentro de 0,0007 uns dos outros -- regiao plana. Empate de verdade,
+        # desempatado pela folha maior, que e o ponto mais conservador da faixa
+        # com o mesmo custo em CV.
         "gradient_boosting_ajustado": com_preparo(
             HistGradientBoostingRegressor(
                 learning_rate=0.05,
                 max_iter=500,
                 max_leaf_nodes=127,
-                min_samples_leaf=10,
+                min_samples_leaf=5,
                 l2_regularization=0.0,
                 random_state=dataset.SEMENTE,
             )
