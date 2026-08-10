@@ -1,0 +1,13 @@
+# Tema fixo em claro: e a superficie contra a qual a paleta dos graficos foi
+# validada (checks de contraste, banda de luminosidade e separacao para daltonismo).
+# Um tema escuro exigiria re-validar a paleta inteira contra a outra superficie.
+[theme]
+base = "light"
+backgroundColor = "#fcfcfb"
+secondaryBackgroundColor = "#f9f9f7"
+textColor = "#0b0b0b"
+primaryColor = "#2a78d6"
+font = "sans serif"
+
+[server]
+headless = true

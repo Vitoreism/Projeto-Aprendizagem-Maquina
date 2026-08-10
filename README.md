@@ -68,7 +68,27 @@ efeito é imediato, sem reinstalar e sem gambiarra de `sys.path`.
 | Treinar e avaliar os modelos | `-m imoveis_jp.models.train` |
 | Buscar hiperparâmetros | `-m imoveis_jp.models.tune` |
 | Resíduos e importância por permutação | `-m imoveis_jp.models.analysis` |
+| Aplicar o critério de decisão (só CV, não toca no teste) | `-m imoveis_jp.models.decisao` |
+| Variante PCA dos seis candidatos | `-m imoveis_jp.models.pca_variant` |
+| t-SNE 2D (EDA) | `-m imoveis_jp.features.tsne_exploracao` |
 | Rodar os testes | `-m pytest` |
+
+### Dashboard
+
+```powershell
+.\.venv\Scripts\python.exe -m streamlit run app.py
+```
+
+Abre em `http://localhost:8501`. Sete abas: o veredito da comparação (com o teste
+atrás de um botão, porque a decisão é fechada antes), comparação por fold, variante
+PCA, resíduos, importância por permutação, t-SNE, e uma aba para prever um imóvel —
+preenchendo os campos à mão ou sorteando um dos 3.087 anúncios reais do conjunto de
+teste, que o modelo nunca viu no treino.
+
+O app só lê os artefatos de `data/processed/`; ele não re-treina a comparação. Se um
+artefato faltar, a aba diz qual comando o gera. O modelo vencedor é reajustado uma
+vez na inicialização (~10s) em vez de vir de um `.joblib` versionado, que poderia
+divergir em silêncio do código.
 
 Detalhes do scrape (retomada, sharding, flags, ética/robots.txt): [docs/scraping.md](docs/scraping.md).
 
