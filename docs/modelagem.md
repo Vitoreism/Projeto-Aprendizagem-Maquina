@@ -13,9 +13,9 @@
 |---|---|
 | Tipo | Regressão |
 | Alvo | `log(preco_venda)` |
-| Observações | 15.987 anúncios com preço |
-| Imóveis físicos distintos | 14.224 |
-| Features | 75 na matriz → 349 depois do one-hot dentro do `Pipeline` |
+| Observações | 15.412 anúncios com preço |
+| Imóveis físicos distintos | 14.101 |
+| Features | 75 na matriz → 131 depois do one-hot dentro do `Pipeline` |
 | Semente | `42`, em `dataset.SEMENTE` |
 
 O alvo vai para log porque a distribuição em reais tem **assimetria 5,92 e curtose
@@ -40,7 +40,7 @@ A assinatura do imóvel é `(preço arredondado ao milhar, área, quartos, banhe
 garagens)`. Anúncio sem preço ou sem área não tem assinatura utilizável e vira
 grupo próprio, em vez de se juntar a um grupo gigante de nulos.
 
-Resultado: **12.820 no treino, 3.167 no teste, 0 grupos dos dois lados.** O
+Resultado: **12.335 no treino, 3.077 no teste, 0 grupos dos dois lados.** O
 `train.py` verifica isso a cada execução e aborta se não for zero.
 
 ---
@@ -91,8 +91,8 @@ custo em acurácia. Aconteceu o contrário:
 O motivo é que os cortes globais **destruíam informação**. O encoder por fold
 preserva toda categoria com suporte no treino: são **329 bairros distintos**,
 contra os 38 que sobravam antes. A matriz caiu de 101 para 75 colunas, mas isso
-é aparência — 26 dummies viraram 5 colunas de texto e o modelo passou a enxergar
-349 colunas depois da codificação, não menos.
+é aparência — 26 dummies viraram 5 colunas de texto, e o que o modelo enxerga
+depois da codificação é decidido no fold, não aqui.
 
 `handle_unknown='infrequent_if_exist'` manda bairro que só aparece no teste para
 o mesmo balde das categorias raras, em vez de quebrar ou de virar coluna que o
@@ -115,21 +115,21 @@ de modelo.
 
 | Modelo | CV MAE (log) | Teste MAE | Erro % mediano | R² (log) |
 |---|---|---|---|---|
-| **Gradient Boosting ajustado** | **0,2155 ± 0,0042** | **R$ 167.866** | **16,2%** | **0,868** |
-| Gradient Boosting (padrão) | 0,2238 ± 0,0032 | R$ 171.392 | 17,0% | 0,861 |
-| Ridge | 0,2906 ± 0,0045 | R$ 290.742 | 22,3% | 0,766 |
-| Baseline (mediana) | 0,6531 ± 0,0047 | R$ 417.354 | 42,5% | −0,001 |
+| **Gradient Boosting ajustado** | **0,2097 ± 0,0029** | **R$ 164.414** | **15,8%** | **0,885** |
+| Gradient Boosting (padrão) | 0,2175 ± 0,0025 | R$ 172.181 | 17,2% | 0,881 |
+| Ridge | 0,2665 ± 0,0019 | R$ 235.362 | 21,4% | 0,825 |
+| Baseline (mediana) | 0,6377 ± 0,0076 | R$ 418.247 | 43,7% | −0,006 |
 
 O baseline existe como piso de sanidade: prever sempre a mediana. Seu R² de
 −0,001 confirma que a montagem está correta — um baseline honesto tem que ficar
 em torno de zero.
 
-O gradient boosting ajustado erra **16,2% na mediana**. Para um imóvel de R$ 575 mil, isso
+O gradient boosting ajustado erra **15,8% na mediana**. Para um imóvel de R$ 575 mil, isso
 é uma faixa de cerca de R$ 100 mil — aceitável para triagem, insuficiente para
 avaliação individual. O desvio da CV é pequeno (±0,004) frente à diferença entre
 os modelos (0,07), então a vantagem sobre o Ridge é real, não ruído de partição.
 
-A distância entre Ridge e boosting indica relações não-lineares e interações
+A distância entre Ridge e boosting (0,057) indica relações não-lineares e interações
 relevantes — provavelmente entre área, bairro e padrão de acabamento.
 
 ---
@@ -305,22 +305,22 @@ atributo**. É leitura, não decisão.
 ### 9.1 Os resíduos estão centrados
 
 ```
-média = +0,0024   mediana = +0,0013   desvio = 0,2988   assimetria = +0,42
+média = +0,0011   mediana = +0,0081   desvio = 0,2871   assimetria = −0,08
 ```
 
 Em log, a mediana do resíduo é praticamente zero: o modelo não tem viés global.
-A assimetria residual de +0,42 é o que sobrou da assimetria 5,92 do alvo em
-reais — a transformação log fez quase todo o trabalho.
+A assimetria residual de −0,08 é o que sobrou da assimetria 5,92 do alvo em
+reais — a transformação log fez praticamente todo o trabalho.
 
 ### 9.2 Onde o modelo erra: nas duas pontas, não só no topo
 
 | Faixa de preço | n | Preço mediano | Viés | Erro mediano | MAE |
 |---|---|---|---|---|---|
-| Q1 (mais barato) | 638 | R$ 190 mil | **+6,9%** | **20,0%** | R$ 55 mil |
-| Q2 | 632 | R$ 410 mil | +10,0% | 15,9% | R$ 88 mil |
-| Q3 | 639 | R$ 590 mil | +1,0% | 13,1% | R$ 104 mil |
-| Q4 | 633 | R$ 830 mil | −4,3% | 14,7% | R$ 156 mil |
-| Q5 (mais caro) | 625 | R$ 1,4 mi | **−14,1%** | **19,5%** | R$ 441 mil |
+| Q1 (mais barato) | 623 | R$ 190 mil | +9,0% | 17,5% | R$ 49 mil |
+| Q2 | 609 | R$ 400 mil | +9,6% | 14,3% | R$ 78 mil |
+| Q3 | 630 | R$ 580 mil | +2,2% | **14,1%** | R$ 107 mil |
+| Q4 | 611 | R$ 820 mil | −4,1% | 14,6% | R$ 144 mil |
+| Q5 (mais caro) | 604 | R$ 1,4 mi | **−14,8%** | **20,4%** | R$ 452 mil |
 
 O viés troca de sinal monotonicamente do Q1 ao Q5: **o modelo puxa tudo para o
 meio.** É a regressão à média clássica de um estimador que minimiza erro — ele
@@ -335,13 +335,15 @@ regressão à média. Diagnosticar só pelo gráfico clássico esconderia o efei
 
 Consequência prática: a previsão do modelo não deve ser lida como estimativa
 pontual de um imóvel de alto padrão. Nesse segmento ela é sistematicamente
-conservadora, em cerca de 14%.
+conservadora, em cerca de 15%.
 
 Eu previa que o erro se concentraria no alto padrão, onde os dados são esparsos.
-Metade certo: o Q5 é de fato o pior, mas o Q1 empata com ele (20,0% contra
-19,5%) por um motivo diferente — não é escassez, é **qualidade de dado** (§9.5).
+Certo em parte. O Q5 é de longe o pior (20,4% contra 14,1% no centro). O Q1 era
+quase tão ruim quanto — mas deixou de ser depois que os bairros foram
+canonizados (§9.7): caiu de 20,0% para 17,5%, porque boa parte do erro ali não
+era escassez de dado, era bairro errado.
 
-O erro em reais, esse sim, cresce monotonicamente: R$ 55 mil no Q1 contra R$ 441
+O erro em reais, esse sim, cresce monotonicamente: R$ 49 mil no Q1 contra R$ 452
 mil no Q5. Para triagem em massa a leitura relevante é a percentual; para decidir
 sobre um imóvel específico, a em reais.
 
@@ -353,27 +355,32 @@ construção). Unidade: quanto o MAE em log piora ao embaralhar a coluna.
 
 | Atributo | Importância | Desvio |
 |---|---|---|
-| `bairro` | **+0,2226** | 0,0056 |
-| `area_util` | **+0,2001** | 0,0030 |
-| `garagens` | +0,0616 | 0,0021 |
-| `suites` | +0,0236 | 0,0016 |
-| `condominio` | +0,0163 | 0,0008 |
-| `quartos` | +0,0114 | 0,0010 |
-| `origem_anuncio` | +0,0102 | 0,0007 |
-| `area_total` | +0,0102 | 0,0010 |
-| `banheiros` | +0,0099 | 0,0006 |
-| `com_varanda_gourmet` | +0,0045 | 0,0007 |
+| `bairro` | **+0,2488** | 0,0062 |
+| `area_util` | **+0,1707** | 0,0034 |
+| `garagens` | +0,0706 | 0,0020 |
+| `suites` | +0,0266 | 0,0012 |
+| `origem_anuncio` | +0,0173 | 0,0013 |
+| `condominio` | +0,0142 | 0,0010 |
+| `quartos` | +0,0120 | 0,0008 |
+| `area_total` | +0,0106 | 0,0012 |
+| `banheiros` | +0,0063 | 0,0008 |
+| `com_varanda_gourmet` | +0,0054 | 0,0008 |
 
-Localização e tamanho respondem por **0,42 dos 0,61** de importância total. Cada
-um deles vale, sozinho, o dobro do MAE final inteiro (0,2145) — embaralhar
-qualquer um dos dois destrói o modelo.
+Localização e tamanho respondem por **0,42 dos 0,61** de importância total.
+Embaralhar `bairro` sozinho piora o MAE em 0,2488, mais do que o MAE final
+inteiro (0,2090) — sem bairro o modelo é pior que inútil.
 
-**24 dos 75 atributos têm importância indistinguível de zero.** Quase todos são
+A ordem entre os dois inverteu depois da canonização (§9.7): `bairro` subiu de
++0,2226 para +0,2488 e `area_util` caiu de +0,2001 para +0,1707. Faz sentido —
+parte do sinal de localização estava perdida em rótulo errado, e o modelo a
+compensava pela área.
+
+**28 dos 75 atributos têm importância indistinguível de zero.** Quase todos são
 comodidades. Isso não significa que comodidade não importe: significa que, dado
 o bairro e a área, ela não acrescenta.
 
 Nota de honestidade sobre `origem_anuncio`: está na matriz como controle do
-artefato de portal, e a permutação confirma que o modelo a usa (+0,0102). Isso é
+artefato de portal, e a permutação confirma que o modelo a usa (+0,0173). Isso é
 esperado e é justamente por isso que ela fica — sem a coluna, a diferença entre
 portais seria absorvida como se fosse diferença entre imóveis.
 
@@ -386,9 +393,9 @@ está o que só um dos métodos enxerga.
 
 | Feature | \|Spearman\| | Importância | Salto de posto |
 |---|---|---|---|
-| `com_lavabo` | 0,228 | +0,0001 | −92 |
-| `com_closet` | 0,177 | −0,0000 | −90 |
-| `com_gerador_de_energia` | 0,131 | −0,0001 | −71 |
+| `com_lavabo` | 0,227 | +0,0002 | −92 |
+| `com_quadra_esportiva` | 0,151 | −0,0000 | −75 |
+| `com_alarme` | 0,143 | −0,0000 | −73 |
 
 `com_lavabo` é a 11ª maior correlação com o preço e vale **zero** para o modelo.
 Não é contradição: lavabo correlaciona com preço porque aparece em apartamento
@@ -399,10 +406,10 @@ correlação estava medindo o efeito de outra variável através dele.
 
 | Feature | \|Spearman\| | Importância | Salto de posto |
 |---|---|---|---|
-| `bairro_bessa` | 0,012 | +0,0059 | +98 |
-| `bairro_aeroclube` | 0,039 | +0,0014 | +65 |
+| `bairro_bessa` | 0,010 | +0,0080 | +98 |
+| `bairro_aeroclube` | 0,038 | +0,0023 | +65 |
 
-`bairro_bessa` tem correlação **0,012** com o preço — praticamente nada — e ainda
+`bairro_bessa` tem correlação **0,010** com o preço — praticamente nada — e ainda
 assim é uma das dummies mais úteis do modelo. O Bessa tem preço mediano de
 R$ 570 mil, colado na mediana geral de R$ 575 mil, então a correlação linear com
 o preço é nula por construção. O que o bairro informa é a relação **preço por
@@ -413,12 +420,12 @@ bivariada consegue ver isso.
 
 ### 9.5 O que o resíduo revelou sobre os dados
 
-Os 16 anúncios do teste abaixo de R$ 50 mil têm erro mediano de **+132%** — o
+Os 15 anúncios do teste abaixo de R$ 50 mil têm erro mediano de **+116%** — o
 modelo prevê consistentemente muito acima. Não é falha do modelo: R$ 35 mil por
-58 m² dá R$ 603/m², contra uma mediana de **R$ 9.019/m²** na base. São entradas
+58 m² dá R$ 603/m², contra uma mediana de **R$ 8.871/m²** na base. São entradas
 de financiamento, permutas ou erro de digitação anunciados como preço de venda.
 
-Dos 52 anúncios com erro acima de 100%, **40% têm preço/m² abaixo de R$ 1.500**.
+Dos 34 anúncios com erro acima de 100%, **47% têm preço/m² abaixo de R$ 1.500**.
 
 O piso de plausibilidade em `build_features` está em R$ 20.000, permissivo
 demais. Um piso por **preço/m²** — e não por preço absoluto — pegaria esses casos
@@ -428,21 +435,156 @@ nesta etapa.
 
 Dois outros segmentos, para fechar:
 
-- **Portal.** `zapimoveis` 15,8%, `chaves_na_mao` 17,5%, anúncios presentes nos
-  dois 14,3%. O imóvel que aparece nos dois portais é mais fácil de prever, o que
+- **Portal.** `zapimoveis` 16,0%, `chaves_na_mao` 16,2%, anúncios presentes nos
+  dois 14,8%. O imóvel que aparece nos dois portais é mais fácil de prever, o que
   faz sentido: são os anúncios com ficha mais completa.
 - **Campos ausentes.** A correlação de Spearman entre número de campos numéricos
-  em branco e erro absoluto é **0,050**. Praticamente nula — a imputação com
+  em branco e erro absoluto é **0,087**. Praticamente nula — a imputação com
   indicadora está segurando bem a ausência, e o erro não vem de lá.
 
-### 9.6 Figuras
+### 9.7 A canonização dos bairros
+
+A análise por segmento levantou uma pergunta: os bairros estão certos? Não
+estavam. **14,0% dos anúncios tinham o bairro errado**, e `bairro` é o atributo
+mais importante do modelo.
+
+#### Os três defeitos
+
+A função `extrair_bairro` jogava o endereço inteiro em `normalizar_texto`, que
+troca vírgula e hífen por espaço. Isso **achatava a estrutura** do endereço num
+fluxo único de palavras e destruía a única pista confiável de onde o campo do
+bairro começa e termina. Sem essa pista, o que sobrou foram dois paliativos e um
+erro de ordenação:
+
+**1. Casamento por substring, na ordem em que a lista foi escrita.** A lista
+tinha `"cabo branco"` antes de `"altiplano"`, então **"Altiplano Cabo Branco"
+casava com Cabo Branco**:
+
+| Rotulados `cabo_branco` | n | Preço/m² mediano |
+|---|---|---|
+| de fato Cabo Branco | 1.573 | R$ 15.000 |
+| de fato Altiplano Cabo Branco | **511** | R$ 11.156 |
+
+26% de diferença fundida numa categoria só. O mesmo com Tambaú/Tambauzinho: 119
+anúncios, 31% de diferença. É o pior tipo de erro possível aqui — não embaralha,
+**junta duas faixas de preço sob o mesmo rótulo**.
+
+**2. O fallback inventava bairros.** Endereço que não batia com nenhum dos 30
+nomes da lista virava *a primeira palavra com mais de 3 letras*. Daí saíram
+`avenida`, `doutor`, `professor`, `comerciante`, `aposentada`, `telegrafista` —
+1.589 anúncios (9,8%) em categorias que não existem. O balde `avenida` tinha IQR
+de preço/m² de **R$ 6.898**, contra R$ 1.316 de um bairro real: agrupava imóveis
+de toda a cidade.
+
+**3. Nomes não-canônicos.** `geisel` em vez de Ernesto Geisel, `planalto` em vez
+de Planalto Boa Esperança, `valentina` em vez de Valentina de Figueiredo.
+
+#### A correção
+
+O endereço tem estrutura, e os dois portais escrevem diferente:
+
+```
+chaves na mao:  'Rua X, 155, Jardim Oceania,João Pessoa/PB'
+zapimoveis:     'Rua X, 38 - Bessa, João Pessoa - PB'
+```
+
+A nova `extrair_bairro` quebra por vírgula **e** hífen, percorre os campos do fim
+para o começo (o bairro fica antes da cidade) e casa contra os **69 nomes
+oficiais** de `neighborhoods.csv`, por conjunto de tokens — ignorando artigos,
+para que "Valentina Figueiredo" e "Valentina de Figueiredo" sejam o mesmo lugar.
+
+Duas decisões que valem justificativa:
+
+- **Vence o nome mais específico**, não o primeiro de uma lista. É literalmente a
+  correção do defeito 1: "altiplano cabo branco" contém tanto `{cabo, branco}`
+  quanto `{altiplano, cabo, branco}`, e o mais específico ganha.
+- **Nunca inventa.** O que não casa vira `nao_informado`. Sobraram **8 anúncios**
+  (0,05%): 7 sem endereço nenhum e 1 em Praia de Intermares, que fica em
+  Cabedelo e legitimamente não é bairro de João Pessoa.
+
+Sobre usar `neighborhoods.csv`: aquele arquivo foi barrado por vazamento na §3.5
+das features, mas o que vazava era `avg_price_m2_sale`, agregação do alvo. A
+coluna `name` é um dicionário de nomes e não carrega informação de preço.
+
+Resultado: **329 valores distintos → 72** (71 oficiais + `nao_informado`).
+
+#### Efeito colateral na deduplicação
+
+`bairro_norm` faz parte da chave de deduplicação `(bairro, preço, área,
+quartos)`. Com bairros errados, o mesmo imóvel anunciado nos dois portais podia
+receber rótulos diferentes de cada lado e **escapar da fusão**. Rerodando:
+
+```
+22.599 anúncios brutos − 7.012 duplicatas fundidas = 15.587 únicos
+```
+
+São **575 duplicatas a mais** encontradas, e a base cai de 16.162 para 15.587
+linhas. Nada foi perdido: são anúncios do mesmo imóvel finalmente unificados.
+
+#### Quanto isso valeu — medido de forma isolada
+
+A base mudou junto com o bairro, então comparar as duas execuções não isola nada.
+O A/B roda sobre as **mesmas linhas e as mesmas folds**, trocando só a coluna:
+
+| | CV MAE (log) | folds |
+|---|---|---|
+| bairro canônico | **0,2097** ± 0,0029 | 0,2139 · 0,2047 · 0,2093 · 0,2101 · 0,2105 |
+| rótulo antigo | 0,2144 ± 0,0029 | 0,2145 · 0,2107 · 0,2119 · 0,2183 · 0,2169 |
+
+**Os cinco folds favorecem o canônico**, com diferença média de **0,0047**. Isso
+decompõe a melhora total: 0,2155 → 0,2144 é a mudança de base (0,0011), e
+0,2144 → 0,2097 é o bairro (0,0047).
+
+A hipótese registrada antes de rodar era "melhora pequena, entre 0,002 e 0,008".
+Confirmou.
+
+**Nota sobre o critério de decisão.** O limiar declarado do projeto é 0,005 para
+declarar vantagem, e 0,0047 fica logo abaixo. Vale ser explícito: aquele limiar
+existe para proteger contra viés de seleção ao escolher o máximo de N
+configurações, e aqui não há N — é uma comparação única, planejada, com 5 de 5
+folds concordando. Mais importante: **a justificativa da correção não é o MAE.**
+14% dos anúncios tinham bairro errado; consertar isso estaria certo mesmo que o
+MAE não mexesse.
+
+#### Efeitos secundários
+
+| | antes | depois |
+|---|---|---|
+| Colunas após o one-hot | 349 | **131** |
+| Importância de `bairro` | +0,2226 | **+0,2488** |
+| Assimetria do resíduo | +0,42 | **−0,08** |
+| Erro mediano no Q1 | 20,0% | **17,5%** |
+| R² (log) no teste | 0,868 | **0,885** |
+
+A queda de 349 para 131 colunas com o modelo *melhorando* é o argumento da §10 do
+material da disciplina — menos atributos, mesmo resultado ou melhor, com menor
+custo — só que aqui o corte não veio de seleção de features, e sim de parar de
+gerar categorias falsas.
+
+O Q1 melhorou bastante: boa parte do erro nos imóveis baratos não era escassez de
+dado, era bairro errado. Gramame, o bairro com maior correlação negativa com
+preço, tinha 60 anúncios espalhados nos baldes `inacio` e `josinaldo`.
+
+#### Uma previsão que não se confirmou
+
+Eu previa que `cabo_branco` melhoraria, "porque hoje são dois bairros somados".
+Não melhorou — foi de 16,4% para **17,8%** de erro mediano.
+
+O motivo é instrutivo. Depois de puro, Cabo Branco tem IQR de preço/m² de **R$
+8.853**, o maior de todos os bairros (o típico é R$ 1.316). É a orla de alto
+padrão: mesmo bairro, imóveis de valores radicalmente diferentes. Misturar o
+Altiplano, mais homogêneo, *diluía* a dificuldade e fazia o número parecer melhor.
+
+Purificar uma categoria não a torna mais fácil — torna o número honesto.
+
+### 9.8 Figuras
 
 | Arquivo | Conteúdo |
 |---|---|
 | `docs/figuras/residuos_diagnostico.png` | 4 painéis: resíduo × previsto, distribuição, erro por faixa, previsto × real |
 | `docs/figuras/importancia_permutacao.png` | top 20 por permutação, com barra de erro |
 
-### 9.7 Execução
+### 9.9 Execução
 
 ```powershell
 .\.venv\Scripts\python.exe -m imoveis_jp.models.analysis

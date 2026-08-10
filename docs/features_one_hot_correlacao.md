@@ -66,7 +66,7 @@ gerada é reparada na etapa seguinte.
 ## 3. `build_features.py` — a consolidação
 
 Roda em cima de `imoveis_joao_pessoa_global_deduplicated.csv` e produz
-`data/processed/features_matrix.csv`. **231 → 77 colunas.**
+`data/processed/features_matrix.csv`. **231 → 77 colunas**, sobre 15.587 imóveis.
 
 ### 3.1 Reparo das numéricas destruídas
 
@@ -111,7 +111,7 @@ Duas ressalvas importantes:
 | Coluna | Tratamento |
 |---|---|
 | `posicao_solar`, `status_construcao`, `tipo_unidade`, `origem_anuncio` | normalizadas como **texto** |
-| `bairro` | preenchido pelo endereço via `extrair_bairro` → **329 níveis**, todos preservados |
+| `bairro` | canonizado do endereço via `extrair_bairro` → **71 bairros oficiais** + `nao_informado` |
 | `anunciante` (442 níveis) | **descartado** — ver §3.5 |
 
 A versão anterior desta etapa fazia `pd.get_dummies` aqui, com dois cortes de
@@ -123,6 +123,11 @@ O one-hot passou para dentro do `Pipeline` de treino (`OneHotEncoder` com
 `min_frequency=30` e `handle_unknown='infrequent_if_exist'`), onde a contagem
 acontece dentro de cada fold. Não custou acurácia; ganhou. Os números estão em
 [§3.1 de modelagem.md](modelagem.md).
+
+Os 329 níveis de bairro que existiam aqui eram, em boa parte, artefato de
+extração: 9,8% dos anúncios estavam em categorias inventadas por um fallback que
+pegava a primeira palavra do endereço. Depois da canonização são **71 bairros
+oficiais**. Ver [§9.7 de modelagem.md](modelagem.md).
 
 Nesta matriz, portanto, **5 categóricas continuam 5 colunas de texto**. O corte
 espelhado de dummy quase-constante (frequência > 99%) não foi reimplantado, e o
@@ -206,7 +211,7 @@ o imóvel. O módulo sinaliza toda feature com |r| ≥ 0,50 contra `origem_anunc
 
 | Arquivo | Conteúdo |
 |---|---|
-| `data/processed/features_matrix.csv` | a matriz consolidada, 16.162 × 77 |
+| `data/processed/features_matrix.csv` | a matriz consolidada, 15.587 × 77 |
 | `data/processed/correlacao_alvo.csv` | ranking de cada feature contra os três alvos |
 | `data/processed/pares_redundantes.csv` | decisões da poda, com o motivo |
 | `data/processed/features_selecionadas.csv` | as 121 features que sobraram (uso de EDA — ver §3.5) |
