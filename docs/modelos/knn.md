@@ -49,9 +49,10 @@ após o `StandardScaler`) dominam a distância euclidiana sobre comodidades
 | Teste erro % mediano | 23,8% |
 | Teste R² (log) | 0,715 |
 
-Folds individuais (MAE log): 0,3256 · 0,3289 · 0,3192 · 0,3160 · 0,3113 — o
-maior desvio entre folds de todos os seis candidatos (0,0064), sinal de que
-o modelo é o mais sensível a qual conjunto de imóveis cai em cada fold.
+Folds individuais (MAE log): 0,3256 · 0,3289 · 0,3192 · 0,3160 · 0,3113 — desvio
+de 0,0064, o **segundo maior** entre os seis candidatos, atrás da MLP (0,0081):
+os dois modelos que dependem de geometria no espaço de atributos são também os
+mais sensíveis a qual conjunto de imóveis cai em cada fold.
 
 ### Por que esse resultado
 

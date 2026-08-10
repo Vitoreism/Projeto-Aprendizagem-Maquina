@@ -1,5 +1,20 @@
 # Documentação do Candidato MLP (Multi-Layer Perceptron)
 
+> **Procedência dos números.** As tabelas abaixo foram atualizadas para a **rodada
+> consolidada da issue #25** (`data/processed/resultados_modelos.csv` e
+> `cv_mae_por_fold.csv`), que é a fonte oficial: uma execução única de
+> `train.py`, com os seis candidatos nos mesmos folds.
+>
+> A versão original deste documento citava CV 0,3116 para a MLP, 0,2002 para o
+> Gradient Boosting e 0,2553 para o Ridge. Aqueles valores vieram da execução feita
+> na branch `feat/MLP`, **antes** da consolidação, e estão preservados em
+> `data/processed/resultados_mlp.csv` — que é artefato daquela execução, **não** a
+> tabela oficial. A diferença é de partição de folds, não de modelo: a ordem dos seis
+> candidatos é idêntica nas duas execuções, e o maior deslocamento é de 0,0046,
+> abaixo do limiar de 0,005 do projeto. Ver a §10 de
+> [`comparacao_modelos.md`](../comparacao_modelos.md) sobre por que duas execuções da
+> mesma base não devolvem exatamente o mesmo número.
+
 ---
 
 ## 1. Motivação e Enquadramento Teórico
@@ -23,16 +38,23 @@ Esta capacidade permite que a rede aprenda aproximações universais de funçõe
 
 | Modelo | CV MAE (log) | CV MAE Desvio | Teste MAE (R$) | Erro % Mediano | R² (log) |
 |---|---|---|---|---|---|
-| **Gradient Boosting Ajustado** | **0,2002** | 0,0028 | R$ 169.450 | 15,5% | 0,897 |
-| **Gradient Boosting (Padrão)** | **0,2087** | 0,0044 | R$ 172.856 | 16,2% | 0,892 |
-| **Ridge** | **0,2553** | 0,0045 | R$ 249.200 | 19,1% | 0,844 |
-| **MLP (Multi-Layer Perceptron)** | **0,3116** | 0,0091 | R$ 286.046 | 20,8% | 0,746 |
-| **Baseline (Mediana)** | **0,6183** | 0,0097 | R$ 443.793 | 43,1% | −0,002 |
+| **Gradient Boosting Ajustado** | **0,1988** | 0,0030 | R$ 170.150 | 15,6% | 0,897 |
+| **Gradient Boosting (Padrão)** | **0,2076** | 0,0056 | R$ 172.892 | 16,1% | 0,892 |
+| **Ridge** | **0,2551** | 0,0022 | R$ 249.200 | 19,1% | 0,844 |
+| **OLS** | **0,2551** | 0,0022 | R$ 249.118 | 19,1% | 0,844 |
+| **Árvore de Decisão** | **0,2846** | 0,0040 | R$ 244.051 | 20,0% | 0,780 |
+| **MLP (Multi-Layer Perceptron)** | **0,3162** | 0,0081 | R$ 286.047 | 20,8% | 0,746 |
+| **KNN** | **0,3202** | 0,0064 | R$ 269.182 | 23,8% | 0,715 |
+| **Baseline (Mediana)** | **0,6183** | 0,0024 | R$ 443.793 | 43,1% | −0,002 |
+
+Folds individuais da MLP (MAE log): 0,3105 · 0,3268 · 0,3237 · 0,3153 · 0,3048 —
+desvio de 0,0081, **o maior dos seis candidatos**, o que faz da MLP o modelo mais
+sensível a quais imóveis caem em cada fold.
 
 ### Honestidade Intelectual & Fundamentação
 Em problemas com dados tabulares de médio porte (~12.214 amostras de treino):
 1. **Árvores de Decisão e Ensembles (Boosting)** particionam o espaço de entrada com cortes ortogonais diretos nos eixos dos atributos, o que se ajusta com alta eficiência à natureza discreta e esparsa de dados imobiliários (ex: presença/ausência de 60+ comodidades e dummies de bairros).
-2. **Redes Neurais Densa (MLP)** tentam suavizar superfícies de decisão através de hiperplanos contínuos. A otimização por gradiente estocástico sobre uma matriz contendo 63 variáveis binárias esparsas apresenta elevado ruído e lentidão na convergência, obtendo CV MAE(log) de **0,3116** (Erro Mediano de 20,8%).
+2. **Redes Neurais Densa (MLP)** tentam suavizar superfícies de decisão através de hiperplanos contínuos. A otimização por gradiente estocástico sobre uma matriz contendo 63 variáveis binárias esparsas apresenta elevado ruído e lentidão na convergência, obtendo CV MAE(log) de **0,3162** (Erro Mediano de 20,8%).
 
 Portanto, os dados confirmam que a MLP supera expressivamente a baseline nula (CV MAE 0,6183), mas sofre em matrizes esparsas tabulares comparada a modelos baseados em árvores e mesmo ao Ridge regularizado.
 
@@ -88,5 +110,5 @@ Conforme ressaltado na teoria:
 | Arquivo em `candidatos/mlp.py` | ✅ SIM | Módulo isolado criado em `src/imoveis_jp/models/candidatos/mlp.py` |
 | Hipótese prévia escrita | ✅ SIM | Declarada no contrato antes da execução da primeira CV |
 | Integridade dos scripts do core | ✅ SIM | Nenhuma alteração em `train.py`, `dataset.py`, `build_features.py` ou `analysis.py` |
-| Sem commit de arquivos gerados | ✅ SIM | `data/processed/` e `docs/figuras/` mantidos fora do git |
+| Sem commit de arquivos gerados | ⚠️ PARCIAL | `data/processed/` **é versionado** neste projeto (ver README), e `resultados_mlp.csv` foi commitado junto do candidato. Ele é o artefato da execução da branch `feat/MLP`, e não a tabela oficial — ver a nota de procedência no topo deste documento |
 | Suíte de testes (Pytest) | ✅ PASSOU | 105/105 testes aprovados (`test_candidatos.py`) |
