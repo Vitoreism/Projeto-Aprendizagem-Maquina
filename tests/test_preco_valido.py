@@ -123,6 +123,74 @@ def test_area_quebrada_nao_e_descartada_como_repasse():
     assert df.iloc[0]["preco_venda"] == 550_000
 
 
+# --------------------------------------------------------------------------
+# venda direta / leilao de banco: regime de preco proprio
+# --------------------------------------------------------------------------
+
+
+def _com_texto(titulos):
+    return pd.DataFrame(
+        {
+            "titulo": titulos,
+            "descricao_completa": [""] * len(titulos),
+            "preco_venda": [100_000.0] * len(titulos),
+            "area_util": [50.0] * len(titulos),
+        }
+    )
+
+
+def test_marca_venda_direta_e_venda_online():
+    df, info = bf.marcar_venda_direta(
+        _com_texto(
+            [
+                "Oferta imperdivel - Apartamento no Industrias | Venda Direta Online",
+                "Apartamento no Gramame, 2 quartos, 1 vaga, 49,2m2 | Venda Online",
+                "Apartamento com 3 quartos a venda no Bessa, Joao Pessoa",
+            ]
+        )
+    )
+    assert list(df["venda_direta"]) == [1, 1, 0]
+    assert info["marcados"] == 2
+
+
+def test_acento_nao_impede_o_casamento():
+    df, _ = bf.marcar_venda_direta(_com_texto(["Imóvel em Venda Direta Online"]))
+    assert df.loc[0, "venda_direta"] == 1
+
+
+def test_financiamento_pela_caixa_nao_e_leilao():
+    """O termo reprovado que mais parecia bom.
+
+    36 anuncios citam 'Caixa Economica' como opcao de financiamento, e o
+    preco/m2 mediano deles e R$ 4.246 -- mercado, nao leilao. Marca-los
+    ensinaria o modelo a descontar 82% de um imovel comum.
+    """
+    df, info = bf.marcar_venda_direta(
+        _com_texto(
+            [
+                "Apartamento no Bessa - aceitamos financiamento Caixa Economica Federal",
+                "Apartamento em Manaira, aceita FGTS e financiamento",
+            ]
+        )
+    )
+    assert info["marcados"] == 0
+
+
+def test_anuncio_sem_texto_fica_zero_e_nao_quebra():
+    """A coluna marca o que o anuncio DECLARA, nao o que o imovel e."""
+    df = pd.DataFrame(
+        {
+            "titulo": [None, ""],
+            "descricao_completa": [None, None],
+            "preco_venda": [100_000.0, 100_000.0],
+            "area_util": [50.0, 50.0],
+        }
+    )
+    df, info = bf.marcar_venda_direta(df)
+    assert list(df["venda_direta"]) == [0, 0]
+    assert info["marcados"] == 0
+
+
 def test_base_real_nao_tem_mais_preco_de_agio():
     """Varre a base inteira: nenhum preco/m2 abaixo do piso sobreviveu."""
     caminho = bf.SAIDA_CSV

@@ -124,9 +124,9 @@ estatística atravessa a fronteira treino/validação. O teste é tocado uma ún
 
 | Modelo | CV MAE (log) | Teste MAE | Erro % mediano | R² (log) |
 |---|---|---|---|---|
-| Gradient Boosting ajustado | 0,1998 | R$ 171.252 | 15,8% | 0,895 |
-| Gradient Boosting (padrão) | 0,2081 | R$ 174.248 | 16,6% | 0,891 |
-| Ridge | 0,2596 | R$ 252.782 | 19,8% | 0,839 |
+| Gradient Boosting ajustado | 0,1988 | R$ 170.150 | 15,6% | 0,897 |
+| Gradient Boosting (padrão) | 0,2076 | R$ 172.892 | 16,1% | 0,892 |
+| Ridge | 0,2551 | R$ 249.200 | 19,1% | 0,844 |
 | Baseline (mediana) | 0,6183 | R$ 443.793 | 43,1% | −0,002 |
 
 Metodologia, decisões e limitações: [docs/modelagem.md](docs/modelagem.md).
@@ -136,11 +136,11 @@ Metodologia, decisões e limitações: [docs/modelagem.md](docs/modelagem.md).
 `analysis` mede, **no conjunto de teste**, onde o modelo erra e do que ele
 depende. Três resultados:
 
-- **O modelo puxa tudo para o meio.** O viés vai de +7,8% no quintil mais barato
-  a −15,2% no mais caro, trocando de sinal monotonicamente. O topo é a pior faixa
-  (20,1% de erro mediano) contra 13,6% no melhor quintil.
-- **`bairro` e `area_util` sozinhos valem 0,44 dos 0,65 de importância total.**
-  29 dos 75 atributos têm importância indistinguível de zero.
+- **O modelo puxa tudo para o meio.** O viés vai de +7,9% no quintil mais barato
+  a −14,3% no mais caro, trocando de sinal monotonicamente. O topo é a pior faixa
+  (19,1% de erro mediano) contra 13,6% no melhor quintil.
+- **`bairro` e `area_util` sozinhos valem 0,42 dos 0,61 de importância total.**
+  34 dos 76 atributos têm importância indistinguível de zero.
 - **Correlação não é importância.** `com_lavabo` é a 11ª maior correlação com o
   preço e vale zero para o modelo; `bairro_bessa` tem correlação 0,012 e é uma
   das dummies mais úteis. A primeira é efeito de área e bairro vazando por uma
@@ -203,6 +203,32 @@ A/B sobre as mesmas 3.087 linhas de teste mostra que o efeito real é de apenas
 **+0,0031**, abaixo do limiar de 0,005 do projeto. O resto da "melhora" é o
 conjunto de avaliação ter perdido linhas impossíveis por construção. A afirmação
 correta não é que o modelo melhorou: é que a base ficou certa. §9.10 de
+[docs/modelagem.md](docs/modelagem.md).
+
+### Etapa 4e — a binária `venda_direta`
+
+262 anúncios de venda direta/leilão de banco têm preço/m² mediano de R$ 1.665
+contra R$ 9.089 do resto — **18% do mercado**. Os termos foram calibrados um a
+um: `caixa economica` e `aceita fgts` foram reprovados (são opção de
+financiamento em anúncio comum, preço/m² de mercado), e `matricula` foi
+reprovado por redundância — os 5 anúncios que ele adiciona sozinho custam de
+R$ 2.790 a R$ 8.694/m².
+
+**Previsão registrada antes de rodar: ganho de 0,005 a 0,015. Medido: 0,0010.**
+O erro tem explicação — o Ridge ganha 0,0045, 4,5 vezes mais que o boosting,
+porque a árvore já reconstruía "apartamento pequeno *naquele* bairro" a partir
+de `bairro` × `area_util`. Previ o ganho do modelo que não tinha como já saber.
+
+A coluna é a **6ª mais importante** por permutação e mesmo assim removê-la custa
+0,0010: permutação mede dependência, ablação mede insubstituibilidade, e a
+diferença é a redundância. Importância alta não justifica manter uma feature.
+
+E o ganho está onde não se esperava: no segmento o viés cai de +11,4% para
++4,1%, mas **77% do ganho global vem dos outros 3.040 anúncios** — sem a coluna,
+os leilões puxavam para baixo a previsão de todo apartamento parecido.
+
+Fica como aviso para a Etapa 5: **toda feature que só o modelo não-linear
+consegue inferir sozinho enviesa a comparação a favor dele.** §9.11 de
 [docs/modelagem.md](docs/modelagem.md).
 
 Por que a extração via LLM do zap continua pendente — e por que completá-la

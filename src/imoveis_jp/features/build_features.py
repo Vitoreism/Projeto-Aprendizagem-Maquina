@@ -138,6 +138,37 @@ PISO_PRECO_M2 = 1_000.0
 AREA_SUSPEITA_M2 = 400.0
 PRECO_M2_DE_AREA_QUEBRADA = 2_000.0
 
+#: marcas de venda direta / leilao de banco no texto do anuncio.
+#:
+#: Sao 257 anuncios com um regime de preco proprio: preco/m2 mediano de
+#: R$ 1.665 contra R$ 9.089 do resto da base -- 18% do mercado, e nao um pouco
+#: abaixo. Sem essa coluna o modelo ve um apartamento de 44 m2 em Paratibe por
+#: R$ 67.384 e nao tem como saber que aquilo e alienacao de banco; ele erra
+#: nesses anuncios e, pior, o erro deles empurra a previsao de todos os outros
+#: apartamentos parecidos para baixo.
+#:
+#: POR QUE SO ESTES DOIS TERMOS. Quatro outros candidatos foram medidos e
+#: reprovados, cada um pelo preco/m2 do grupo que formam:
+#:
+#:    termo              n     preco/m2 mediano   veredito
+#:    venda direta      172        R$ 1.633       coerente
+#:    venda online       85        R$ 1.720       coerente
+#:    caixa economica    36        R$ 4.246       anuncio comum que cita o banco
+#:    aceita fgts        65        R$ 8.600       anuncio comum
+#:    leilao              1              --       nao existe na pratica
+#:    matricula         259        R$ 1.668       98% redundante (254 dos 259
+#:                                                ja batem em 'venda direta')
+#:
+#: 'caixa economica' e 'aceita fgts' aparecem em anuncio normal como opcao de
+#: financiamento -- o preco/m2 deles e o do mercado, nao o do leilao. E
+#: 'matricula' so parece bom por sobreposicao: os 5 anuncios que ele adiciona
+#: sozinho tem preco/m2 de R$ 2.790 a R$ 8.694, ou seja, e ruido.
+#:
+#: LIMITACAO. A coluna marca o que o anuncio DECLARA, nao o que o imovel e.
+#: Anuncio de leilao sem descricao utilizavel fica com 0. Isso torna a feature
+#: conservadora: o que ela marca e leilao, mas nem todo leilao esta marcado.
+MARCAS_VENDA_DIRETA = r"venda direta|venda online"
+
 #: colunas numericas corrompidas pela colisao de nomes com 'comodidade_<x>'
 #: na fusao html+llm; sao reconstruidas a partir do json bruto.
 COLUNAS_REPARAVEIS = ["suites", "banheiros", "quartos", "garagens", "vagas", "area_util"]
@@ -322,6 +353,62 @@ def aplicar_limites(df: pd.DataFrame) -> Tuple[pd.DataFrame, Dict[str, int]]:
         print(f"[Limites] Valores implausiveis anulados: {detalhe}.", flush=True)
 
     return df, fora_da_faixa
+
+
+def _texto_do_anuncio(df: pd.DataFrame) -> pd.Series:
+    """Titulo e descricao num campo so, sem acento e em minusculas."""
+    partes = [
+        df[c].fillna("") for c in ("titulo", "descricao_completa") if c in df.columns
+    ]
+    if not partes:
+        return pd.Series("", index=df.index, dtype="string")
+
+    texto = partes[0].astype("string")
+    for outra in partes[1:]:
+        texto = texto.str.cat(outra.astype("string"), sep=" ")
+
+    return (
+        texto.str.normalize("NFKD")
+        .str.encode("ascii", "ignore")
+        .str.decode("ascii")
+        .str.lower()
+        .str.replace(r"\s+", " ", regex=True)
+    )
+
+
+def marcar_venda_direta(df: pd.DataFrame) -> Tuple[pd.DataFrame, Dict[str, Any]]:
+    """Sinaliza alienacao de banco, que tem regime de preco proprio.
+
+    Ver MARCAS_VENDA_DIRETA para quais termos entram, quais foram reprovados e
+    qual e a limitacao da coluna.
+
+    Roda depois de filtrar_comodidades para nao passar pelo corte de frequencia
+    das binarias de comodidade -- esta coluna nao e comodidade, e o criterio
+    daquele filtro nao se aplica a ela.
+    """
+    marcado = _texto_do_anuncio(df).str.contains(MARCAS_VENDA_DIRETA, regex=True, na=False)
+    df["venda_direta"] = marcado.astype("int8")
+
+    quantidade = int(marcado.sum())
+    pm = _preco_por_m2(df)
+    info = {
+        "marcados": quantidade,
+        "proporcao": round(quantidade / len(df), 4) if len(df) else 0.0,
+        "preco_m2_mediano_marcados": float(pm[marcado].median()) if quantidade else None,
+        "preco_m2_mediano_resto": float(pm[~marcado].median()),
+    }
+
+    if quantidade:
+        print(
+            f"[Venda direta] {quantidade} anuncios marcados "
+            f"(preco/m2 mediano R$ {info['preco_m2_mediano_marcados']:,.0f} contra "
+            f"R$ {info['preco_m2_mediano_resto']:,.0f} do resto).",
+            flush=True,
+        )
+    else:
+        print("[Venda direta] nenhum anuncio marcado.", flush=True)
+
+    return df, info
 
 
 def _preco_por_m2(df: pd.DataFrame) -> pd.Series:
@@ -534,6 +621,7 @@ def construir_matriz() -> pd.DataFrame:
     df, areas_anuladas = corrigir_area_implausivel(df)
     df, info_repasse = remover_precos_que_nao_sao_venda(df)
     df, info_filtro = filtrar_comodidades(df, info_binarias["canonicas"])
+    df, info_venda_direta = marcar_venda_direta(df)
     df = normalizar_bairro(df)
     df = normalizar_categoricas(df)
 
@@ -553,6 +641,7 @@ def construir_matriz() -> pd.DataFrame:
         "preenchidos_da_descricao": preenchidos_do_texto,
         "areas_anuladas_por_incoerencia": areas_anuladas,
         "repasse_agio": info_repasse,
+        "venda_direta": info_venda_direta,
         "binarias": info_binarias,
         "filtro": info_filtro,
     }
