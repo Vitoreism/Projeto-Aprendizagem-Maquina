@@ -215,21 +215,28 @@ def executar() -> pd.DataFrame:
             raise RuntimeError(f"validacao cruzada de '{nome}' produziu score nao-finito")
 
         modelo.fit(X_tr, y_tr)
-        metricas = metricas_em_reais(y_te.to_numpy(), modelo.predict(X_te))
+        # Train-set metrics after fit: useful to detect memorization (gap vs test).
+        # CV remains the honest score on the training side during model selection.
+        metricas_treino = metricas_em_reais(y_tr.to_numpy(), modelo.predict(X_tr))
+        metricas_teste = metricas_em_reais(y_te.to_numpy(), modelo.predict(X_te))
 
         linhas.append(
             {
                 "modelo": nome,
                 "cv_mae_log_media": mae_cv.mean(),
                 "cv_mae_log_desvio": mae_cv.std(),
-                **metricas,
+                **{f"{chave}_treino": valor for chave, valor in metricas_treino.items()},
+                **{f"{chave}_teste": valor for chave, valor in metricas_teste.items()},
             }
         )
         print(
             f"[{nome:18s}] CV MAE(log)={mae_cv.mean():.4f} +/- {mae_cv.std():.4f} | "
-            f"teste MAE=R$ {metricas['mae_reais']:,.0f} | "
-            f"erro mediano={metricas['erro_percentual_mediano']:.1f}% | "
-            f"R2(log)={metricas['r2_log']:.3f}",
+            f"treino MAE=R$ {metricas_treino['mae_reais']:,.0f} "
+            f"({metricas_treino['erro_percentual_mediano']:.1f}%) "
+            f"R2={metricas_treino['r2_log']:.3f} | "
+            f"teste MAE=R$ {metricas_teste['mae_reais']:,.0f} "
+            f"({metricas_teste['erro_percentual_mediano']:.1f}%) "
+            f"R2={metricas_teste['r2_log']:.3f}",
             flush=True,
         )
 
@@ -257,6 +264,8 @@ def executar() -> pd.DataFrame:
 
     print("\n" + "=" * 72)
     print("RESULTADOS (ordenados pelo MAE da validacao cruzada no treino)")
+    print("Colunas *_treino: score no proprio conjunto de treino apos o fit")
+    print("Colunas *_teste:  score no hold-out (generalizacao)")
     print("=" * 72)
     print(resultados.to_string(index=False, float_format=lambda v: f"{v:,.4f}"))
     print("=" * 72)
