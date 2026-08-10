@@ -46,7 +46,7 @@ professora vai perguntar pelo nome real.
 | **João Victor Dantas** | Scraper do **ZapImóveis**; candidato **MLP** | `src/scrapping/zap_imoveis/` (branch), `candidatos/mlp.py`, `docs/modelos/mlp.md` |
 | **Gabriel Ribeiro** | **Extração via LLM** (issue #9): descoberta empírica de atributos, schema dinâmico, lote, rotação de chaves, checkpoints; candidato **Árvore de Decisão** (issue #21) | `processing/extract_llm_features.py`, `candidatos/arvore.py`, `docs/issue_9_extracao_llm.md`, `docs/modelos/arvore.md` |
 | **João Vitor Sampaio** | Reestruturação do repo; **etapas 3, 4, 4b–4e**: consolidação do one-hot, correlação, split/pipeline/CV, tuning, resíduos e permutação, bairros, repasse/ágio, `venda_direta`; **protocolo (#20)** e **comparação final (#25)**: critério em código, PCA, t-SNE | `features/`, `models/{dataset,train,tune,analysis,decisao,pca_variant}.py`, `docs/modelagem.md`, `docs/protocolo_comparacao.md`, `docs/comparacao_modelos.md` |
-| **Micael Targino** | Limpeza do one-hot: dummies quase-constantes e sinônimos perdidos | `features/build_features.py` (PR #19) |
+| **Micael Targino** | Limpeza do one-hot: dummies quase-constantes e sinônimos perdidos; **dashboard Streamlit** de comparação visual dos modelos | `features/build_features.py` (PR #19), `app.py`, `src/imoveis_jp/dashboard/` |
 
 ---
 
@@ -768,6 +768,35 @@ Estas três **todo mundo** precisa saber:
   distância é engenharia de atributos, não capacidade — e registramos isso como
   limitação conhecida, não como resolvido.
 
+### 6.8 Perguntaram do DASHBOARD ou do SCRAPER e você fez modelo
+
+- *"O dashboard recalcula os modelos?"* → **Não, e de propósito.** Ele só lê os
+  artefatos de `data/processed/`. A issue #25 exige que os números venham de uma
+  rodada única; se o dashboard recalculasse, estaria publicando uma segunda rodada.
+  A única coisa que ele ajusta na hora é o modelo vencedor, para poder prever um
+  imóvel novo — ~10 s, em cache, em vez de um binário versionado que poderia
+  divergir do código.
+- *"Por que o resultado do teste está escondido atrás de um botão?"* → Porque o
+  critério fecha a decisão **antes** de olhar o teste, e a interface encena a regra
+  em vez de só afirmá-la. Quem usa o dashboard passa pelo mesmo protocolo que nós.
+- *"Por que o formulário de previsão pede só alguns campos?"* → Foram escolhidos
+  **pela importância por permutação já medida**, não por palpite: 34 dos 76
+  atributos têm importância indistinguível de zero. Pedir 76 respostas para mudar
+  quase nada seria teatro.
+- *"A previsão é confiável?"* → Ela nunca aparece como número seco: vem com a faixa
+  empírica de erro medida no teste (p10 −27,1%, p90 +36,9%) e avisa quando a
+  entrada sai do território conhecido. Com 15,6% de erro mediano, cravar um valor
+  seria precisão falsa.
+- *"Como o scraper do zap evita ser bloqueado?"* → Janela deslizante de 20
+  requisições monitorando a taxa de bloqueio; acima de 15% ele desacelera sozinho.
+  Mais reciclagem do contexto do navegador a cada 80 requisições, pausas
+  humanizadas e um verificador que distingue página íntegra de página bloqueada.
+- *"Por que particionar a busca por bairro e faixa de preço?"* → Porque o portal
+  corta a listagem num teto de páginas: sem particionar, você não alcança os
+  anúncios além desse teto. E os slugs de bairro foram **validados por HTTP** —
+  `bairro-dos-ipes` dava 404 e virou `ipes`; `jardim-oceania` e `intermares` não
+  existem como slug e saíram da lista.
+
 ---
 
 ## 7. Limitações — o que admitir sem hesitar
@@ -805,132 +834,160 @@ Admitir estas seis custa menos que ser pego em qualquer uma delas.
 
 ## 8. Checklist antes de apresentar
 
-- [x] ~~**Alinhar o número da árvore.**~~ Resolvido por documentação: `arvore.md`
-      abre com uma tabela **[A] sem poda (inscrita, 0,2846)** vs **[B] podada
-      (vencedora da busca, 0,2450)**, dizendo qual entra na tabela oficial e por quê;
-      `comparacao_modelos.md` §4 e §7 declaram a assimetria. **Quem apresentar a
-      árvore precisa saber os dois números** — está em §6.5 deste roteiro.
-- [x] ~~**`mlp.md` com números de execução anterior.**~~ Resolvido: a tabela do
-      `mlp.md` foi atualizada para a rodada #25 e ganhou nota de procedência
-      apontando `resultados_modelos.csv` como fonte oficial. `resultados_mlp.csv`
-      **continua no repo** como artefato da branch `feat/MLP` — foi mantido de
-      propósito, para não apagar o entregável de outra pessoa; se preferirem removê-lo,
-      é uma linha.
-- [x] ~~`knn.md` afirmava ter o maior desvio entre folds.~~ Corrigido: o maior é o da
-      MLP (0,0081); o KNN é o segundo (0,0064).
-- [ ] **O código do scraper do ZapImóveis não está na `main`.** A pasta
-      `src/imoveis_jp/scraping/zap_imoveis/` contém só um JSON — nenhuma linha de
-      código. Os 13 módulos (~1.760 linhas) vivem em `origin/feat/zapimoveis`, uma
-      branch **órfã** (sem ancestral comum com a main). Metade da coleta do projeto
-      está fora do repositório principal; se pedirem para mostrar o scraper, ele não
-      abre. Ver o plano de migração ao fim desta seção.
-- [ ] **Fixar as versões** em `requirements.txt` (`==` em vez de `>=`) e, numa issue
-      própria, rerodar `train.py → decisao.py → pca_variant.py` uma única vez. Só
-      depois disso os números do repo voltam a ser reproduzíveis entre máquinas.
-      **Não faça isso na véspera da apresentação:** muda todos os números publicados
-      no README, em `modelagem.md` e em `protocolo_comparacao.md`.
-- [ ] Trocar `dev A` / `dev E` / `dev KNN` / `dev OLS` / `dev (feat/MLP)` pelos
-      **nomes reais** no campo `dono` dos candidatos.
-- [ ] O README ainda lista a etapa 5 como "próxima etapa" — marcar como concluída e
-      apontar para `docs/comparacao_modelos.md`.
-- [ ] **Versionar as três figuras da árvore.** `arvore_curva_overfitting.png`,
-      `arvore_podada.png` e `arvore_importancia_nativa.png` estão referenciadas em
-      `arvore.md` mas **não estão no git** — existem só na máquina de quem gerou.
-      Para o resto do time e para quem clonar o repo, as três imagens estão
-      quebradas. `git add docs/figuras/arvore_*.png` resolve.
-- [ ] Conferir que as demais figuras abrem: `residuos_diagnostico.png`,
-      `importancia_permutacao.png`, `tsne_precos.png`, `heatmap_top30.png`.
-- [ ] Rodar `pytest` uma vez na frente de todo mundo, para ninguém ser pego por teste
-      quebrado.
+> **A avaliação dos modelos está fechada. Nada será reprocessado** — nem treino,
+> nem busca de hiperparâmetros, nem PCA, nem t-SNE. Os números do repo são os
+> finais, e todo item abaixo é preparação de gente, não de máquina. Se alguém
+> propuser "rodar de novo só para conferir", a resposta é não: uma execução nova
+> devolveria números levemente diferentes (§10 de `comparacao_modelos.md`) e
+> obrigaria a reescrever tabela por tabela, na véspera, sem mudar conclusão
+> nenhuma.
+
+**Na máquina que vai apresentar:**
+
+- [ ] `pip install -e .` **antes de qualquer coisa.** O dashboard trouxe
+      `streamlit` e `plotly`; sem elas o `pytest` **aborta na coleta** — não é um
+      teste falhando, é a suíte inteira não rodando — e o dashboard nem abre.
+- [ ] Abrir o dashboard uma vez (`python -m streamlit run app.py`) e passar pelas
+      sete abas, para ninguém descobrir na hora que uma delas pede um artefato.
+- [ ] Rodar `pytest` uma vez, depois do install.
+- [ ] Conferir que as figuras abrem: `residuos_diagnostico.png`,
+      `importancia_permutacao.png`, `tsne_precos.png`, `heatmap_top30.png`,
+      `arvore_podada.png`, `arvore_curva_overfitting.png`.
+
+**Preparação de quem fala:**
+
+- [ ] Todo mundo decora a **seção 1** e o **cartão de bolso da seção 5**.
 - [ ] Cada dono relê a **hipótese** do próprio candidato — a professora pode pedir
       para recitar e comparar com o medido.
-- [ ] Todo mundo decora a **seção 1** e o **cartão de bolso da seção 5**.
+- [ ] Quem apresentar a árvore precisa saber os **dois números** (0,2846 inscrita,
+      0,2450 podada) e por que a inscrita é a sem poda — §6.5.
+- [ ] Quem apresentar o dashboard precisa saber por que o resultado do teste está
+      atrás de um botão — §8.2.
+- [ ] Ler a **seção 7** (limitações). Admitir as oito custa menos que ser pego em
+      qualquer uma.
 
-### 8.1 Plano de migração do scraper do ZapImóveis
+**Cosmético, se sobrar tempo — nada aqui muda número:**
 
-Levantamento feito sobre `origin/feat/zapimoveis`. **A boa notícia é que os módulos
-já são package-ready:** todo import interno usa o padrão
-`try: from .config import X / except: from config import X`, então funcionam
-inalterados dentro de um pacote.
+- [ ] Trocar `dev A` / `dev E` / `dev KNN` / `dev OLS` / `dev (feat/MLP)` pelos
+      **nomes reais** no campo `dono` — 7 ocorrências em `candidatos/*.py` e 7 nas
+      fichas de `docs/modelos/`. É busca e substituição; o campo não entra em conta
+      nenhuma.
+- [ ] `docs/scraping.md` só documenta o chavesnamao. O scraper do zap está no
+      pacote e no README, mas retomada, workers e `--merge` não estão explicados em
+      lugar nenhum — o essencial para responder está na §8.1 aqui.
+- [ ] Apagar as 10 branches remotas já contidas na `main`, incluindo a órfã
+      `feat/zapimoveis`, que virou redundante.
 
-| Módulo | Linhas | | Módulo | Linhas |
-|---|---|---|---|---|
-| `scraper.py` | 399 | | `tracker.py` | 143 |
-| `extractor.py` | 231 | | `config.py` | 104 |
-| `storage.py` | 179 | | `verifier.py` | 91 |
-| `logger.py` | 159 | | `__main__.py` | 88 |
-| `collector.py` | 78 | | `rate_limiter.py` | 74 |
-| `controller.py` | 69 | | `url_builder.py` | 59 |
+**Resolvido, não precisa mais olhar:** o número da árvore (documentado em
+`arvore.md` como [A]/[B]), os números do `mlp.md` (alinhados à rodada #25), o
+desvio entre folds do `knn.md`, as três figuras da árvore (versionadas), o scraper
+do zap (no pacote), e a etapa 5 no README (fechada).
 
-**Total: 13 módulos, ~1.760 linhas.** Dependências (`bs4`, `playwright`) já estão no
-`requirements.txt`. **Não** levar junto: os 12 `.pyc`, o `scraping.log`, o
-`pause.flag`, a cópia antiga do scraper do chaves em `src/scrapping/` e o
-`imoveis_joao_pessoa_zap.json` de 189 mil linhas — que já está na main, em dois
-lugares.
+### 8.1 O scraper do ZapImóveis — o que saber
 
-**Custo A — só mover (≈15 min, risco baixo).** Copiar os 13 `.py` para
-`src/imoveis_jp/scraping/zap_imoveis/`. Ajustes necessários: **três linhas** em
-`tests_resilience.py`, que importa pelo caminho velho
-(`from src.scrapping.zap_imoveis...`) — ou deixar esse arquivo de fora. Validação:
-`python -c "from imoveis_jp.scraping.zap_imoveis import scraper"`. Resultado: o
-scraper entra no repo e roda, mas continua gravando dentro de `src/`.
+Até 10/08 o código de coleta do zap **não estava na main**: a pasta
+`src/imoveis_jp/scraping/zap_imoveis/` tinha só um JSON. Os 13 módulos viviam numa
+branch **órfã**, sem ancestral comum com a main, o que impedia o merge. Hoje estão
+no pacote (PR #37), rodando por `-m imoveis_jp.scraping.zap_imoveis`.
 
-**Custo B — conformidade com a regra nº 1 do README (+30–60 min).** Hoje o
-`config.py` do zap deriva tudo de `os.path.dirname(os.path.abspath(__file__))`:
+**Arquitetura, para quem for perguntado.** 13 módulos, ~1.760 linhas, com
+responsabilidade separada: `url_builder` monta as buscas (a coleta é particionada
+por **bairro × faixa de preço**, porque o portal corta a listagem num teto de
+páginas); `collector` extrai os links de cada listagem; `extractor` lê a página do
+anúncio pelos seletores CSS; `storage` grava com deduplicação e permite retomada;
+`tracker` acompanha progresso; `rate_limiter` observa a taxa de bloqueio numa
+janela deslizante de 20 requisições e desacelera acima de 15%; `verifier` decide se
+a página veio íntegra ou bloqueada; `controller` captura `Ctrl+C` e o `pause.flag`
+para parar sem perder o que já foi coletado.
 
-```python
-DIR_ATUAL         = os.path.dirname(os.path.abspath(__file__))
-ARQUIVO_SAIDA     = os.path.join(DIR_ATUAL, "imoveis_joao_pessoa_zap.json")
-PAUSE_FLAG_FILE   = os.path.join(DIR_ATUAL, "pause.flag")
-STORAGE_STATE_FILE= os.path.join(DIR_ATUAL, "session_state.json")
-```
+**Dois pontos que valem contar, porque são decisões de engenharia, não detalhe:**
 
-Ou seja, o scraper **grava dados dentro do código** — e é literalmente por isso que
-existe hoje um `imoveis_joao_pessoa_zap.json` dentro de
-`src/imoveis_jp/scraping/zap_imoveis/`. A regra do README é que todo I/O de dados
-passe por `imoveis_jp.config`. São **6 constantes mais um `glob`**: as quatro acima,
-`LOG_FILE`/`REPORT_FILE`, e a busca por arquivos de worker em `storage.py` linha 36
-(`glob(os.path.join(DIR_ATUAL, "imoveis_joao_pessoa_zap_*.json"))`) — se mudar a
-saída e deixar o `glob`, a retomada em paralelo passa a procurar as partes na pasta
-errada e falha em silêncio. Mais uma constante nova
-(`ANUNCIOS_ZAP_JSON = RAW / "imoveis_joao_pessoa_zap.json"`) em
-`src/imoveis_jp/config.py`, que hoje **não tem** nenhuma referência ao zap.
+- **Slugs de bairro validados empiricamente.** A lista de bairros do
+  `config.py` foi testada contra o portal por HTTP: `bairro-dos-ipes` dava 404 e
+  virou `ipes`; `jardim-oceania` e `intermares` não existem como slug e saíram.
+  Está comentado no próprio arquivo, com o motivo de cada remoção.
+- **Coleta paralela com fusão.** Cada worker escreve o seu próprio arquivo
+  (`imoveis_joao_pessoa_zap_w1.json`…) e o `--merge` funde tudo na base canônica
+  com desduplicação. Mesma ideia do `merge_parts` do chavesnamao.
 
-**B não exige rerodar a coleta.** As duas cópias do JSON são bit a bit idênticas
-(mesmo SHA-256), então apontar para `data/raw/` aponta para o mesmo conteúdo que já
-está lá; e o pipeline a jusante (`extract_llm_features`, `deduplicate_dataset`) já lê
-de `data/raw/`. A cópia dentro de `src/` é órfã — ninguém a consome. Com os caminhos
-corretos, dá para apagar as 189 mil linhas duplicadas de dentro do código-fonte.
+**A migração também consertou duas coisas.** O `config.py` derivava todos os
+caminhos de `os.path.dirname(os.path.abspath(__file__))` — o scraper **gravava
+dados dentro do código**, que é por que existia uma cópia do JSON de 189 mil linhas
+dentro de `src/`. Agora sai tudo de `imoveis_jp.config`: dado em `data/raw`, estado
+de execução (log, relatório, flag de pausa, sessão) em `data/interim`. E havia um
+**bug latente**: `scraper.py` importava `LOG_FILE`/`REPORT_FILE` de `config`, mas
+quem os definia era o `logger.py` — com os defaults (`total_workers=1`, sem
+partição) a execução estourava `ImportError`. **O modo de um worker só nunca
+funcionou**; ninguém notou porque a coleta foi feita com vários workers, ramo que
+monta os nomes na mão.
 
-A verificação do B roda **offline**, sem rede e sem playwright — o único código que
-lê o caminho é a retomada:
+*Se perguntarem "como vocês sabem que ainda funciona?"* — a verificação foi
+offline: os 11 módulos importam, os caminhos apontam para `data/raw`/`data/interim`,
+o `ScraperEngine()` instancia com os defaults, a retomada reindexa os **11.841
+registros** já coletados a partir do caminho novo, e o CLI sobe inteiro. O que
+**não** foi verificado é se o portal ainda responde aos mesmos seletores — isso só
+se prova com o site no ar, e não é efeito da migração: vale para a coleta de 01/08
+do mesmo jeito.
 
-```powershell
-.\.venv\Scripts\python.exe -c "from imoveis_jp.scraping.zap_imoveis.storage import StorageManager; s=StorageManager(); print(s.get_total_collected())"
-```
+---
 
-Se devolver os ~11,8 mil registros já coletados, os caminhos estão certos.
+### 8.2 O dashboard Streamlit — o que saber
 
-**A ressalva que permanece:** nada disso prova que o scraper *ainda coleta* — seletor
-de página, sessão e rate limit só se verificam com o site no ar. Mas isso não é
-efeito do B: é uma incerteza que já existe hoje, com a coleta de 01/08, e que
-continuaria existindo sem encostar no código.
+`app.py` mais `src/imoveis_jp/dashboard/` (~1.300 linhas), entregue pelo Micael.
+Roda com `python -m streamlit run app.py` e abre em `localhost:8501`. Sete abas:
+**O veredito · Por fold · PCA · Resíduos · Importância · t-SNE · Prever um imóvel**.
+
+**Quatro decisões de projeto que sustentam pergunta:**
+
+1. **O resultado do teste fica atrás de um botão** ("Revelar a avaliação no
+   teste"). Não é enfeite: o critério da issue #25 fecha a decisão **antes** de
+   olhar o teste, e a interface encena essa regra em vez de só afirmá-la. É
+   provavelmente a melhor coisa para mostrar à professora, porque torna o
+   protocolo visível.
+2. **O app só lê artefatos de `data/processed/`; não re-treina a comparação.** O
+   MLP sozinho leva ~20 min, e a issue #25 exige que os números venham de **uma
+   rodada única** — se o dashboard recalculasse, ele estaria publicando uma
+   segunda rodada. Se um artefato faltar, a aba diz qual comando o regenera em vez
+   de estourar erro.
+3. **O modelo vencedor é reajustado na inicialização** (~10 s, uma vez, em cache),
+   em vez de vir de um `.joblib` versionado — um binário no repo pode divergir em
+   silêncio do código que o gerou.
+4. **A previsão nunca aparece como número seco.** Vem com a faixa empírica de erro
+   medida no teste (p10 −27,1%, p90 +36,9%) e avisa quando a entrada sai do
+   território conhecido. Com 15,6% de erro mediano, um valor cravado seria precisão
+   falsa. Os campos do formulário foram escolhidos **pela importância por
+   permutação já medida**, não por palpite: 34 dos 76 atributos têm importância
+   indistinguível de zero, e pedir 76 respostas para mudar quase nada seria teatro.
+
+A aba **Prever um imóvel** sorteia um dos **3.087 anúncios reais do conjunto de
+teste** — imóveis que o modelo nunca viu — e mostra previsão × preço real × erro,
+com link para o anúncio original. É a demonstração mais convincente que o projeto
+tem, e não custa nada além de um clique.
 
 ---
 
 ## 9. Sugestão de divisão de fala (15 min)
 
-| Tempo | Quem | O quê |
-|---|---|---|
-| 0–1 | qualquer um | Pitch da seção 1 + o diagrama de 11 passos |
-| 1–3 | Vitor Reis + João Victor | Coleta: 2 portais, resumível/shardável, ética/robots |
-| 3–5 | Gabriel | Enriquecimento: descoberta empírica, LLM vs regex, **a validação de 94%** e o que decidimos não extrair |
-| 5–6 | Micael + J. V. Sampaio | Features: 231 → 76, os três geradores, as duas features removidas por vazamento |
-| 6–8 | J. V. Sampaio | Split agrupado, pipeline sem vazamento, CV e o limiar de 0,005 |
-| 8–10 | J. V. Sampaio | Diagnóstico: regressão à média, permutação, **e os três defeitos de dado que ele revelou** |
-| 10–12 | todos, 20 s cada | Cada um apresenta o próprio modelo: hipótese registrada → medido → veredito |
-| 12–13,5 | J. V. Sampaio | Critério de decisão em código, vantagem declarada, PCA e t-SNE |
-| 13,5–15 | qualquer um | Limitações (seção 7) e conclusão |
+**Com o dashboard aberto desde o começo** — ele tem uma aba para quase cada bloco
+abaixo, e mostrar é mais rápido que descrever.
+
+| Tempo | Quem | O quê | Aba |
+|---|---|---|---|
+| 0–1 | qualquer um | Pitch da seção 1 + o diagrama de 11 passos | — |
+| 1–3 | Vitor Reis + João Victor | Coleta: 2 portais, resumível/shardável, ética/robots | — |
+| 3–4,5 | Gabriel | Enriquecimento: descoberta empírica, LLM vs regex, **a validação de 94%** e o que decidimos não extrair | — |
+| 4,5–6 | Micael + J. V. Sampaio | Features: 231 → 76, os três geradores, as duas features removidas por vazamento | t-SNE |
+| 6–8 | J. V. Sampaio | Split agrupado, pipeline sem vazamento, CV e o limiar de 0,005 | Por fold |
+| 8–9,5 | J. V. Sampaio | Diagnóstico: regressão à média, permutação, **e os três defeitos de dado que ele revelou** | Resíduos · Importância |
+| 9,5–11,5 | todos, 20 s cada | Cada um apresenta o próprio modelo: hipótese registrada → medido → veredito | — |
+| 11,5–13 | J. V. Sampaio | Critério em código, vantagem declarada, PCA — **e revelar o teste ao vivo** | O veredito · PCA |
+| 13–14 | Micael | Prever um imóvel: sortear um anúncio real do teste e comparar | Prever um imóvel |
+| 14–15 | qualquer um | Limitações (seção 7) e conclusão | — |
+
+**O momento a não desperdiçar:** clicar em "Revelar a avaliação no teste" **depois**
+de mostrar o critério e o ranking de CV. A interface encena a regra do protocolo —
+a decisão fecha antes de olhar o teste — e isso é mais convincente do que qualquer
+frase sobre metodologia.
 
 **Fechamento sugerido:** *"O melhor modelo erra 15,6% na mediana, e a vantagem dele
 foi declarada por um critério que escrevemos em código antes de ver qualquer
