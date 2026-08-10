@@ -19,14 +19,13 @@ from sklearn.compose import ColumnTransformer
 from sklearn.dummy import DummyRegressor
 from sklearn.ensemble import HistGradientBoostingRegressor
 from sklearn.impute import SimpleImputer
-from sklearn.linear_model import Ridge
 from sklearn.metrics import mean_absolute_error, r2_score, root_mean_squared_error
 from sklearn.model_selection import GroupKFold, cross_val_score
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
 
 from imoveis_jp import config
-from imoveis_jp.models import dataset
+from imoveis_jp.models import candidatos, dataset
 
 SAIDA_RESULTADOS = config.PROCESSED / "resultados_modelos.csv"
 SAIDA_RELATORIO = config.INTERIM / "relatorio_treino.json"
@@ -42,7 +41,10 @@ MINIMO_POR_CATEGORIA = 30
 
 
 def montar_preprocessador(
-    numericas: List[str], binarias: List[str], categoricas: List[str]
+    numericas: List[str],
+    binarias: List[str],
+    categoricas: List[str],
+    escalar_binarias: bool = False,
 ) -> ColumnTransformer:
     """Imputacao, escala e one-hot -- todos ajustados dentro do fold.
 
@@ -54,6 +56,28 @@ def montar_preprocessador(
     categorias raras contando so o treino. handle_unknown='infrequent_if_exist'
     manda categoria inedita no teste para o mesmo balde das raras, em vez de
     quebrar ou de virar uma coluna que o modelo nunca viu.
+
+    ESCALAR_BINARIAS -- por que a opcao existe e por que o default e False.
+
+    As continuas saem do StandardScaler com variancia 1. As binarias passam
+    direto, e uma binaria com p=0,1 tem variancia 0,09. Para KNN e MLP isso faz
+    as continuas dominarem a distancia e o gradiente; para arvore e Ridge e
+    irrelevante (a arvore corta por limiar, e o limiar em 0/1 nao muda com a
+    escala). Cada candidato declara o que precisa, em vez de existirem dois
+    pre-processamentos concorrentes que ninguem sabe qual usar.
+
+    Por que StandardScaler e nao MinMaxScaler: MinMax em dado que ja e 0/1 e
+    literalmente identidade -- deixaria a binaria com variancia 0,09 e as
+    continuas com 1, ou seja, nao resolveria nada. So a padronizacao iguala as
+    variancias, que e o problema.
+
+    UM DETALHE QUE VALE REGISTRAR: as colunas indicadoras de ausencia geradas
+    pelo add_indicator tambem sao binarias, mas nascem DENTRO do bloco 'num' e
+    ja passam pelo StandardScaler hoje, independentemente desta opcao. Ou seja,
+    a base ja escalava parte das suas binarias e nao escalava a outra parte, sem
+    que isso tivesse sido decidido. Com escalar_binarias=True o tratamento fica
+    coerente; com False, a inconsistencia permanece -- e e inofensiva para os
+    modelos que usam o default.
     """
     continuas = Pipeline(
         [
@@ -70,7 +94,7 @@ def montar_preprocessador(
     return ColumnTransformer(
         [
             ("num", continuas, numericas),
-            ("bin", "passthrough", binarias),
+            ("bin", StandardScaler() if escalar_binarias else "passthrough", binarias),
             ("cat", nominais, categoricas),
         ],
         remainder="drop",
@@ -80,62 +104,52 @@ def montar_preprocessador(
 def montar_modelos(
     numericas: List[str], binarias: List[str], categoricas: List[str]
 ) -> Dict[str, Pipeline]:
-    def com_preparo(regressor):
+    """Os modelos de referencia mais todos os candidatos inscritos.
+
+    As duas referencias nao sao candidatas e por isso ficam aqui, fixas:
+
+    - `baseline_mediana` e piso de sanidade, nao modelo. Nao tem hipotese a
+      registrar nem grade a buscar -- ele existe para provar que a montagem
+      esta correta (R2 tem que dar ~0).
+    - `gradient_boosting` na configuracao padrao existe para medir o ganho do
+      ajuste. Tirar do lugar apagaria a referencia do quanto a busca rendeu.
+
+    Todo o resto vem de `candidatos.descobrir()`, cada um com o preparo que ele
+    proprio declarou -- e sempre sobre as MESMAS colunas e o MESMO split, que e
+    a regra 1 do protocolo.
+    """
+
+    def com_preparo(regressor, escalar_binarias: bool = False):
         return Pipeline(
             [
-                ("preparo", montar_preprocessador(numericas, binarias, categoricas)),
+                (
+                    "preparo",
+                    montar_preprocessador(
+                        numericas, binarias, categoricas, escalar_binarias
+                    ),
+                ),
                 ("regressor", regressor),
             ]
         )
 
-    return {
+    modelos = {
         # piso absoluto: prever sempre a mediana. qualquer modelo tem que ganhar disto.
         "baseline_mediana": com_preparo(DummyRegressor(strategy="median")),
-        # alpha=1,0 nao e escolha preguicosa: a busca varreu de 0,1 a 1.000 e
-        # devolveu exatamente o default. o gargalo do linear aqui nao e
-        # regularizacao, e forma funcional.
-        "ridge": com_preparo(Ridge(alpha=1.0, random_state=dataset.SEMENTE)),
         # configuracao padrao, mantida como referencia do ganho do ajuste.
         "gradient_boosting": com_preparo(
             HistGradientBoostingRegressor(random_state=dataset.SEMENTE)
         ),
-        # vencedora do GridSearchCV de imoveis_jp.models.tune, fixada aqui para
-        # o treino ser reproduzivel sem depender de rodar a busca antes.
-        #
-        # min_samples_leaf=5 substitui o 10 que estava aqui, e a troca merece
-        # explicacao porque a diferenca NAO passa o limiar do projeto.
-        #
-        # A regra de decisao tem duas partes. A primeira diz que vence o menor
-        # MAE da CV -- e e 5 (0,2057 contra 0,2084). A segunda diz quando se
-        # pode DECLARAR vantagem sobre o segundo colocado: >= 0,005. Os 0,0027
-        # daqui nao chegam la, entao o que se ship e o vencedor da CV, mas sem
-        # afirmar que ele e comprovadamente melhor.
-        #
-        # O que sustenta a escolha nao e o duelo, e o eixo inteiro. A media
-        # sobre as 8 configuracoes de cada nivel cai monotonicamente:
-        #
-        #    5 -> 0,2089   10 -> 0,2109   20 -> 0,2126   50 -> 0,2187
-        #
-        # e os 5 folds favorecem 5 contra 10. Isso e efeito sistematico, nao
-        # sorte de uma configuracao. O 10 tinha vindo de um argumento de
-        # dominio (cauda longa, folha maior evita decorar imovel caro); a
-        # medicao contradiz esse prior nesta faixa, e o prior cede.
-        #
-        # Por que 5 e nao 2, que e o minimo da sonda (0,2050): 2, 3 e 5 estao
-        # dentro de 0,0007 uns dos outros -- regiao plana. Empate de verdade,
-        # desempatado pela folha maior, que e o ponto mais conservador da faixa
-        # com o mesmo custo em CV.
-        "gradient_boosting_ajustado": com_preparo(
-            HistGradientBoostingRegressor(
-                learning_rate=0.05,
-                max_iter=500,
-                max_leaf_nodes=127,
-                min_samples_leaf=5,
-                l2_regularization=0.0,
-                random_state=dataset.SEMENTE,
-            )
-        ),
     }
+
+    for nome, candidato in candidatos.descobrir().items():
+        if nome in modelos:
+            raise ValueError(
+                f"O candidato '{nome}' colide com um modelo de referencia. "
+                f"Escolha outro nome -- os dois iriam para a mesma linha do csv."
+            )
+        modelos[nome] = com_preparo(candidato.regressor, candidato.escalar_binarias)
+
+    return modelos
 
 
 def metricas_em_reais(y_log_real: np.ndarray, y_log_previsto: np.ndarray) -> Dict[str, float]:

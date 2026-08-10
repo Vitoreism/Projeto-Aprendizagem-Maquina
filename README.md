@@ -231,6 +231,27 @@ Fica como aviso para a Etapa 5: **toda feature que só o modelo não-linear
 consegue inferir sozinho enviesa a comparação a favor dele.** §9.11 de
 [docs/modelagem.md](docs/modelagem.md).
 
+### Etapa 5 — infraestrutura da comparação de modelos
+
+`src/imoveis_jp/models/candidatos/` é um **registro por descoberta**: cada dev
+cria um arquivo e exporta uma constante `CANDIDATO`. Não existe lista central
+para editar, e é por isso que cinco pessoas trabalham na mesma semana sem
+colidir — quando duas mexeram em `build_features.py` na mesma janela, quatro dos
+cinco conflitos foram em arquivo gerado.
+
+O `Candidato` **recusa** hipótese vazia. Não é burocracia: três dos achados mais
+úteis do projeto foram previsões erradas (o vazamento estrutural que melhorou o
+modelo, o erro que não estava só no alto padrão, o `venda_direta` que rendeu dez
+vezes menos que o previsto). Nenhuma apareceria se a hipótese pudesse ser
+escrita depois do resultado — então a regra virou código.
+
+`ridge` e `gradient_boosting_ajustado` migraram para o formato novo, com os
+números idênticos aos de antes (0,2551 e 0,1988), provando que a refatoração não
+mexeu em nada.
+
+Protocolo, as três decisões de projeto e o aviso sobre viés de comparação:
+[docs/protocolo_comparacao.md](docs/protocolo_comparacao.md).
+
 Por que a extração via LLM do zap continua pendente — e por que completá-la
 provavelmente não vale a pena:
 [docs/extracao_zap_diagnostico.md](docs/extracao_zap_diagnostico.md).

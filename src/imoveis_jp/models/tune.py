@@ -26,102 +26,52 @@ from typing import Any, Dict, List
 
 import numpy as np
 import pandas as pd
-from sklearn.ensemble import HistGradientBoostingRegressor
-from sklearn.linear_model import Ridge
 from sklearn.model_selection import GridSearchCV, GroupKFold
 from sklearn.pipeline import Pipeline
 
 from imoveis_jp import config
-from imoveis_jp.models import dataset, train
+from imoveis_jp.models import candidatos, dataset, train
 
 SAIDA_MELHORES = config.PROCESSED / "melhores_hiperparametros.json"
 SAIDA_BUSCA = config.INTERIM / "busca_hiperparametros.csv"
 
-#: grade do gradient boosting, refinada a partir de uma primeira passada.
-#:
-#: a passada inicial usou max_leaf_nodes [15, 31, 63] e max_iter [200, 500], e o
-#: MAE medio por valor mostrou duas coisas:
-#:
-#:   max_leaf_nodes  15 -> 0,2346   31 -> 0,2291   63 -> 0,2262
-#:   max_iter       200 -> 0,2313  500 -> 0,2286
-#:
-#: max_leaf_nodes melhorava monotonicamente ATE A BORDA da grade, sinal classico
-#: de que o otimo estava fora dela -- por isso a faixa foi estendida ate 255.
-#: ja max_iter saturou: as duas melhores configuracoes com 200 e com 500 ficaram
-#: a 0,00002 uma da outra, porque early_stopping='auto' liga sozinho acima de
-#: 10.000 amostras (temos 12.820) e o modelo para antes do teto. max_iter virou
-#: valor fixo, so como limite superior.
-GRADE_BOOSTING: Dict[str, List[Any]] = {
-    # 0,1 e o default e venceu 0,05 na primeira passada (0,2288 contra 0,2311),
-    # mas a diferenca e pequena e a taxa interage com a profundidade, entao as
-    # duas continuam na grade.
-    "regressor__learning_rate": [0.05, 0.1],
-    # teto, nao alvo: ver o comentario sobre early stopping acima.
-    "regressor__max_iter": [500],
-    # complexidade por arvore, o unico eixo que mexeu de verdade no resultado.
-    # 31 e o default; 127 e 255 entraram porque 63 estava na borda melhorando.
-    "regressor__max_leaf_nodes": [31, 63, 127, 255],
-    # preco de imovel tem cauda longa: folha maior impede a arvore de isolar
-    # um unico anuncio de alto padrao e decorar o valor dele. Era esse o
-    # raciocinio para a grade comecar em 20 -- e a segunda passada mostrou que
-    # ele estava errado. Com [20, 50] o otimo caiu na BORDA (20 -> 0,2204 de
-    # media contra 50 -> 0,2265), o mesmo defeito que max_leaf_nodes tinha na
-    # primeira passada. Sondando abaixo:
-    #
-    #    2 -> 0,2163    5 -> 0,2154    10 -> 0,2155    20 -> 0,2183    50 -> 0,2263
-    #
-    # o minimo e interior e fica em 5-10. A grade foi estendida para baixo.
-    #
-    # depois da canonizacao dos bairros a base mudou e o eixo foi remedido. 5
-    # voltou a ficar na borda, entao sondamos abaixo de novo:
-    #
-    #    1 -> 0,2059    2 -> 0,2050    3 -> 0,2057    5 -> 0,2057    10 -> 0,2084
-    #
-    # a curva vira em 1, entao o minimo e interior. 2, 3 e 5 estao dentro de
-    # 0,0007 -- regiao plana. 2 e 3 entraram na grade para que isso fique
-    # reproduzivel, e nao so num comentario.
-    #
-    # o descarte dos repasses mudou a base outra vez, e o eixo foi remedido:
-    #
-    #    1 -> 0,1998   2 -> 0,1997   3 -> 0,1989   5 -> 0,1998
-    #    8 -> 0,2006  10 -> 0,2022  15 -> 0,2024  20 -> 0,2033
-    #
-    # pela primeira vez a curva sobe dos DOIS lados -- minimo em 3, interior,
-    # nada a estender. E nada a mudar: o 5 em producao esta a 0,0009 do minimo,
-    # e 1, 2, 3 e 5 cabem todos dentro desses 0,0009. Regiao plana, nao
-    # diferenca; o limiar do projeto (0,005) esta cinco vezes acima disso.
-    "regressor__min_samples_leaf": [2, 3, 5, 10, 20, 50],
-    # EIXO MORTO, fixado no default. Na segunda passada a media entre
-    # configuracoes deu 0,2234 com l2=0 e 0,2235 com l2=1 -- diferenca na 4a
-    # casa. A "vitoria" do 1,0 aparecia so na melhor configuracao (0,2178
-    # contra 0,2183), 0,12 desvio entre folds: ruido de particao. Mantido na
-    # grade como valor unico para nao gastar metade das configuracoes com ele.
-    "regressor__l2_regularization": [0.0],
-}
-
-#: varredura logaritmica ampla: com 99 features padronizadas, o alpha util pode
-#: estar a ordens de magnitude do default 1,0, e passos menores nao mudariam a
-#: escolha.
-GRADE_RIDGE: Dict[str, List[Any]] = {
-    "regressor__alpha": [0.1, 1.0, 10.0, 100.0, 1000.0],
-}
+#: As grades migraram para `candidatos/*.py`, junto do modelo a que pertencem.
+#: Elas nao sao configuracao deste modulo: sao parte da declaracao do candidato,
+#: e mante-las aqui obrigaria cinco pessoas a editar este arquivo.
 
 
 def montar_buscas(
     numericas: List[str], binarias: List[str], categoricas: List[str]
 ) -> Dict[str, GridSearchCV]:
-    def com_preparo(regressor) -> Pipeline:
+    """Uma busca por candidato inscrito que tenha grade.
+
+    Candidato com `grade` vazia e pulado sem reclamar: nem todo modelo tem
+    hiperparametro que valha buscar, e o vazio ali significa "sem busca", nao
+    "esqueci" -- quem esqueceu nao passa no teste do registro.
+    """
+
+    def com_preparo(regressor, escalar_binarias: bool) -> Pipeline:
         return Pipeline(
             [
-                ("preparo", train.montar_preprocessador(numericas, binarias, categoricas)),
+                (
+                    "preparo",
+                    train.montar_preprocessador(
+                        numericas, binarias, categoricas, escalar_binarias
+                    ),
+                ),
                 ("regressor", regressor),
             ]
         )
 
-    def busca(regressor, grade: Dict[str, List[Any]]) -> GridSearchCV:
-        return GridSearchCV(
-            com_preparo(regressor),
-            param_grid=grade,
+    buscas = {}
+    for nome, candidato in candidatos.descobrir().items():
+        if not candidato.grade:
+            print(f"[{nome}] sem grade declarada; sem busca.", flush=True)
+            continue
+
+        buscas[nome] = GridSearchCV(
+            com_preparo(candidato.regressor, candidato.escalar_binarias),
+            param_grid=candidato.grade,
             cv=GroupKFold(n_splits=train.FOLDS),
             scoring="neg_mean_absolute_error",
             # em serie pelo mesmo motivo do train.py: o HistGradientBoosting ja
@@ -132,12 +82,7 @@ def montar_buscas(
             refit=True,
         )
 
-    return {
-        "ridge": busca(Ridge(random_state=dataset.SEMENTE), GRADE_RIDGE),
-        "gradient_boosting": busca(
-            HistGradientBoostingRegressor(random_state=dataset.SEMENTE), GRADE_BOOSTING
-        ),
-    }
+    return buscas
 
 
 def executar() -> pd.DataFrame:
@@ -152,6 +97,7 @@ def executar() -> pd.DataFrame:
 
     numericas, binarias, categoricas = dataset.colunas_por_tipo(X)
     buscas = montar_buscas(numericas, binarias, categoricas)
+    inscritos = candidatos.descobrir()
 
     linhas = []
     melhores: Dict[str, Dict[str, Any]] = {}
@@ -163,7 +109,7 @@ def executar() -> pd.DataFrame:
 
         busca.fit(X_tr, y_tr, groups=g_tr)
 
-        mae_padrao = _mae_da_configuracao_padrao(nome, busca)
+        mae_padrao = _mae_da_configuracao_padrao(inscritos[nome], busca)
         metricas = train.metricas_em_reais(y_te.to_numpy(), busca.predict(X_te))
 
         parametros = {k.replace("regressor__", ""): v for k, v in busca.best_params_.items()}
@@ -227,22 +173,28 @@ def executar() -> pd.DataFrame:
     return resultados
 
 
-def _mae_da_configuracao_padrao(nome: str, busca: GridSearchCV) -> float:
-    """MAE da configuracao default, se ela estiver na grade.
+def _mae_da_configuracao_padrao(candidato: candidatos.Candidato, busca: GridSearchCV) -> float:
+    """MAE da configuracao default do estimador, se ela estiver na grade.
 
     Serve de referencia honesta para o ganho: comparar o melhor da busca com o
     numero do train.py seria comparar execucoes diferentes.
+
+    Os defaults sao lidos do proprio sklearn, instanciando a classe sem
+    argumento. A versao anterior mantinha um dicionario com os defaults escritos
+    a mao por nome de modelo -- que quebra em silencio de duas formas: quando o
+    sklearn muda um default entre versoes, e quando alguem inscreve um candidato
+    novo e esquece de adiciona-lo ali. Nos dois casos a funcao devolvia nan e o
+    ganho ficava em branco no relatorio sem ninguem entender por que.
     """
-    padroes = {
-        "ridge": {"regressor__alpha": 1.0},
-        "gradient_boosting": {
-            "regressor__learning_rate": 0.1,
-            "regressor__max_leaf_nodes": 31,
-            "regressor__min_samples_leaf": 20,
-            "regressor__l2_regularization": 0.0,
-        },
+    padrao = type(candidato.regressor)()
+    alvo = {
+        chave: getattr(padrao, chave.replace("regressor__", ""))
+        for chave in candidato.grade
+        if hasattr(padrao, chave.replace("regressor__", ""))
     }
-    alvo = padroes.get(nome, {})
+    if not alvo:
+        return float("nan")
+
     for parametros, score in zip(busca.cv_results_["params"], busca.cv_results_["mean_test_score"]):
         if all(parametros.get(k) == v for k, v in alvo.items()):
             return float(-score)
