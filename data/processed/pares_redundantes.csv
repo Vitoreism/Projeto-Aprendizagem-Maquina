@@ -1,3 +1,3 @@
 mantida,descartada,correlacao_entre_elas,forca_mantida,forca_descartada
-tipo_unidade_terreo_com_area,tipo_unidade_apartamento_tipo,0.9230263009517297,0.05348939929958926,0.0533573804206927
-area_util,area_total,0.9184299587459744,0.6962777538514862,0.6296342052162923
+tipo_unidade_apartamento_tipo,tipo_unidade_terreo_com_area,0.9230145680511668,0.05600245224869924,0.05598251911656441
+area_util,area_total,0.919748210161849,0.6914093233881863,0.6317172455272919

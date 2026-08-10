@@ -18,30 +18,30 @@
     {
       "modelo": "ridge",
       "configuracoes": 5,
-      "cv_mae_log_padrao": 0.29060303847827224,
-      "cv_mae_log_melhor": 0.29060303847827224,
+      "cv_mae_log_padrao": 0.2673278894004165,
+      "cv_mae_log_melhor": 0.2673278894004165,
       "alpha": 1.0,
-      "mae_reais": 290742.1539094012,
-      "rmse_reais": 2017014.527485876,
-      "mae_log": 0.29034175948971847,
-      "r2_log": 0.7657035655719998,
-      "erro_percentual_mediano": 22.274423762939215
+      "mae_reais": 250870.51302627719,
+      "rmse_reais": 1237868.4012167375,
+      "mae_log": 0.27004830262871043,
+      "r2_log": 0.8212604574164807,
+      "erro_percentual_mediano": 21.098021591982207
     },
     {
       "modelo": "gradient_boosting",
       "configuracoes": 32,
-      "cv_mae_log_padrao": 0.2221757462465682,
-      "cv_mae_log_melhor": 0.21539409000147777,
+      "cv_mae_log_padrao": 0.2105475088472149,
+      "cv_mae_log_melhor": 0.2056542834093955,
       "l2_regularization": 0.0,
       "learning_rate": 0.05,
       "max_iter": 500,
       "max_leaf_nodes": 127,
       "min_samples_leaf": 5,
-      "mae_reais": 168484.0901217801,
-      "rmse_reais": 397933.4963466091,
-      "mae_log": 0.2144024790917381,
-      "r2_log": 0.8686973314508866,
-      "erro_percentual_mediano": 15.987392420582708
+      "mae_reais": 164528.88317044626,
+      "rmse_reais": 396971.2303235057,
+      "mae_log": 0.20622221385009282,
+      "r2_log": 0.8865677561439474,
+      "erro_percentual_mediano": 15.392647019218597
     }
   ]
 }
