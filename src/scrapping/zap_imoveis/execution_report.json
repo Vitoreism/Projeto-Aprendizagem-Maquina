@@ -1,0 +1,1235 @@
+{
+    "inicio_execucao": "2026-07-30T21:01:00.071396",
+    "particoes_processadas": 203,
+    "total_links_coletados": 4186,
+    "novos_links_unicos": 4107,
+    "sucesso_extracao": 4107,
+    "falhas_extracao": 0,
+    "checkpoints_salvos": 83,
+    "reciclagens_contexto": 52,
+    "desafios_anti_bot": 2,
+    "retentativas_sucesso": 2,
+    "particoes_detalhes": [
+        {
+            "label": "João Pessoa (Geral) - Até R$ 250k",
+            "paginas": 100,
+            "novos_links": 50,
+            "total_links_pagina": 54
+        },
+        {
+            "label": "João Pessoa (Geral) - R$ 250k a R$ 400k",
+            "paginas": 100,
+            "novos_links": 47,
+            "total_links_pagina": 52
+        },
+        {
+            "label": "João Pessoa (Geral) - R$ 400k a R$ 600k",
+            "paginas": 100,
+            "novos_links": 98,
+            "total_links_pagina": 107
+        },
+        {
+            "label": "João Pessoa (Geral) - R$ 600k a R$ 900k",
+            "paginas": 100,
+            "novos_links": 90,
+            "total_links_pagina": 95
+        },
+        {
+            "label": "João Pessoa (Geral) - R$ 900k a R$ 1.3M",
+            "paginas": 100,
+            "novos_links": 46,
+            "total_links_pagina": 50
+        },
+        {
+            "label": "João Pessoa (Geral) - R$ 1.3M a R$ 2.0M",
+            "paginas": 100,
+            "novos_links": 48,
+            "total_links_pagina": 53
+        },
+        {
+            "label": "João Pessoa (Geral) - Acima de R$ 2.0M",
+            "paginas": 100,
+            "novos_links": 83,
+            "total_links_pagina": 84
+        },
+        {
+            "label": "Bessa - Até R$ 250k",
+            "paginas": 71,
+            "novos_links": 97,
+            "total_links_pagina": 99
+        },
+        {
+            "label": "Bessa - R$ 250k a R$ 400k",
+            "paginas": 71,
+            "novos_links": 86,
+            "total_links_pagina": 87
+        },
+        {
+            "label": "Bessa - R$ 400k a R$ 600k",
+            "paginas": 71,
+            "novos_links": 82,
+            "total_links_pagina": 85
+        },
+        {
+            "label": "Bessa - R$ 600k a R$ 900k",
+            "paginas": 71,
+            "novos_links": 82,
+            "total_links_pagina": 84
+        },
+        {
+            "label": "Bessa - R$ 900k a R$ 1.3M",
+            "paginas": 71,
+            "novos_links": 84,
+            "total_links_pagina": 84
+        },
+        {
+            "label": "Bessa - R$ 1.3M a R$ 2.0M",
+            "paginas": 71,
+            "novos_links": 84,
+            "total_links_pagina": 85
+        },
+        {
+            "label": "Bessa - Acima de R$ 2.0M",
+            "paginas": 71,
+            "novos_links": 83,
+            "total_links_pagina": 85
+        },
+        {
+            "label": "Manaira - Até R$ 250k",
+            "paginas": 80,
+            "novos_links": 82,
+            "total_links_pagina": 85
+        },
+        {
+            "label": "Manaira - R$ 250k a R$ 400k",
+            "paginas": 80,
+            "novos_links": 70,
+            "total_links_pagina": 71
+        },
+        {
+            "label": "Manaira - R$ 400k a R$ 600k",
+            "paginas": 80,
+            "novos_links": 41,
+            "total_links_pagina": 43
+        },
+        {
+            "label": "Manaira - R$ 600k a R$ 900k",
+            "paginas": 80,
+            "novos_links": 45,
+            "total_links_pagina": 46
+        },
+        {
+            "label": "Manaira - R$ 900k a R$ 1.3M",
+            "paginas": 80,
+            "novos_links": 44,
+            "total_links_pagina": 44
+        },
+        {
+            "label": "Manaira - R$ 1.3M a R$ 2.0M",
+            "paginas": 80,
+            "novos_links": 36,
+            "total_links_pagina": 39
+        },
+        {
+            "label": "Manaira - Acima de R$ 2.0M",
+            "paginas": 80,
+            "novos_links": 35,
+            "total_links_pagina": 36
+        },
+        {
+            "label": "Tambau - Até R$ 250k",
+            "paginas": 45,
+            "novos_links": 34,
+            "total_links_pagina": 34
+        },
+        {
+            "label": "Tambau - R$ 250k a R$ 400k",
+            "paginas": 45,
+            "novos_links": 35,
+            "total_links_pagina": 35
+        },
+        {
+            "label": "Tambau - R$ 400k a R$ 600k",
+            "paginas": 45,
+            "novos_links": 18,
+            "total_links_pagina": 19
+        },
+        {
+            "label": "Tambau - R$ 600k a R$ 900k",
+            "paginas": 45,
+            "novos_links": 17,
+            "total_links_pagina": 17
+        },
+        {
+            "label": "Tambau - R$ 900k a R$ 1.3M",
+            "paginas": 45,
+            "novos_links": 18,
+            "total_links_pagina": 18
+        },
+        {
+            "label": "Tambau - R$ 1.3M a R$ 2.0M",
+            "paginas": 45,
+            "novos_links": 18,
+            "total_links_pagina": 18
+        },
+        {
+            "label": "Tambau - Acima de R$ 2.0M",
+            "paginas": 45,
+            "novos_links": 17,
+            "total_links_pagina": 17
+        },
+        {
+            "label": "Cabo-branco - Até R$ 250k",
+            "paginas": 73,
+            "novos_links": 52,
+            "total_links_pagina": 53
+        },
+        {
+            "label": "Cabo-branco - R$ 250k a R$ 400k",
+            "paginas": 73,
+            "novos_links": 42,
+            "total_links_pagina": 44
+        },
+        {
+            "label": "Cabo-branco - R$ 400k a R$ 600k",
+            "paginas": 73,
+            "novos_links": 28,
+            "total_links_pagina": 29
+        },
+        {
+            "label": "Cabo-branco - R$ 600k a R$ 900k",
+            "paginas": 73,
+            "novos_links": 32,
+            "total_links_pagina": 32
+        },
+        {
+            "label": "Cabo-branco - R$ 900k a R$ 1.3M",
+            "paginas": 73,
+            "novos_links": 29,
+            "total_links_pagina": 30
+        },
+        {
+            "label": "Cabo-branco - R$ 1.3M a R$ 2.0M",
+            "paginas": 73,
+            "novos_links": 36,
+            "total_links_pagina": 37
+        },
+        {
+            "label": "Cabo-branco - Acima de R$ 2.0M",
+            "paginas": 72,
+            "novos_links": 41,
+            "total_links_pagina": 43
+        },
+        {
+            "label": "Altiplano-cabo-branco - Até R$ 250k",
+            "paginas": 46,
+            "novos_links": 33,
+            "total_links_pagina": 34
+        },
+        {
+            "label": "Altiplano-cabo-branco - R$ 250k a R$ 400k",
+            "paginas": 46,
+            "novos_links": 24,
+            "total_links_pagina": 24
+        },
+        {
+            "label": "Altiplano-cabo-branco - R$ 400k a R$ 600k",
+            "paginas": 46,
+            "novos_links": 23,
+            "total_links_pagina": 24
+        },
+        {
+            "label": "Altiplano-cabo-branco - R$ 600k a R$ 900k",
+            "paginas": 46,
+            "novos_links": 11,
+            "total_links_pagina": 11
+        },
+        {
+            "label": "Altiplano-cabo-branco - R$ 900k a R$ 1.3M",
+            "paginas": 46,
+            "novos_links": 11,
+            "total_links_pagina": 11
+        },
+        {
+            "label": "Altiplano-cabo-branco - R$ 1.3M a R$ 2.0M",
+            "paginas": 46,
+            "novos_links": 12,
+            "total_links_pagina": 12
+        },
+        {
+            "label": "Altiplano-cabo-branco - Acima de R$ 2.0M",
+            "paginas": 46,
+            "novos_links": 13,
+            "total_links_pagina": 13
+        },
+        {
+            "label": "Aeroclube - Até R$ 250k",
+            "paginas": 33,
+            "novos_links": 31,
+            "total_links_pagina": 31
+        },
+        {
+            "label": "Aeroclube - R$ 250k a R$ 400k",
+            "paginas": 33,
+            "novos_links": 31,
+            "total_links_pagina": 31
+        },
+        {
+            "label": "Aeroclube - R$ 400k a R$ 600k",
+            "paginas": 33,
+            "novos_links": 18,
+            "total_links_pagina": 20
+        },
+        {
+            "label": "Aeroclube - R$ 600k a R$ 900k",
+            "paginas": 33,
+            "novos_links": 18,
+            "total_links_pagina": 18
+        },
+        {
+            "label": "Aeroclube - R$ 900k a R$ 1.3M",
+            "paginas": 33,
+            "novos_links": 18,
+            "total_links_pagina": 18
+        },
+        {
+            "label": "Aeroclube - R$ 1.3M a R$ 2.0M",
+            "paginas": 33,
+            "novos_links": 17,
+            "total_links_pagina": 17
+        },
+        {
+            "label": "Aeroclube - Acima de R$ 2.0M",
+            "paginas": 33,
+            "novos_links": 18,
+            "total_links_pagina": 18
+        },
+        {
+            "label": "Tambauzinho - Até R$ 250k",
+            "paginas": 7,
+            "novos_links": 7,
+            "total_links_pagina": 7
+        },
+        {
+            "label": "Tambauzinho - R$ 250k a R$ 400k",
+            "paginas": 7,
+            "novos_links": 8,
+            "total_links_pagina": 9
+        },
+        {
+            "label": "Tambauzinho - R$ 400k a R$ 600k",
+            "paginas": 7,
+            "novos_links": 8,
+            "total_links_pagina": 8
+        },
+        {
+            "label": "Tambauzinho - R$ 600k a R$ 900k",
+            "paginas": 7,
+            "novos_links": 8,
+            "total_links_pagina": 8
+        },
+        {
+            "label": "Tambauzinho - R$ 900k a R$ 1.3M",
+            "paginas": 7,
+            "novos_links": 8,
+            "total_links_pagina": 8
+        },
+        {
+            "label": "Tambauzinho - R$ 1.3M a R$ 2.0M",
+            "paginas": 7,
+            "novos_links": 8,
+            "total_links_pagina": 8
+        },
+        {
+            "label": "Tambauzinho - Acima de R$ 2.0M",
+            "paginas": 7,
+            "novos_links": 5,
+            "total_links_pagina": 5
+        },
+        {
+            "label": "Brisamar - Até R$ 250k",
+            "paginas": 14,
+            "novos_links": 253,
+            "total_links_pagina": 254
+        },
+        {
+            "label": "Brisamar - R$ 250k a R$ 400k",
+            "paginas": 14,
+            "novos_links": 17,
+            "total_links_pagina": 17
+        },
+        {
+            "label": "Brisamar - R$ 400k a R$ 600k",
+            "paginas": 14,
+            "novos_links": 17,
+            "total_links_pagina": 17
+        },
+        {
+            "label": "Brisamar - R$ 600k a R$ 900k",
+            "paginas": 14,
+            "novos_links": 17,
+            "total_links_pagina": 17
+        },
+        {
+            "label": "Brisamar - R$ 900k a R$ 1.3M",
+            "paginas": 14,
+            "novos_links": 2,
+            "total_links_pagina": 2
+        },
+        {
+            "label": "Brisamar - R$ 1.3M a R$ 2.0M",
+            "paginas": 14,
+            "novos_links": 2,
+            "total_links_pagina": 2
+        },
+        {
+            "label": "Brisamar - Acima de R$ 2.0M",
+            "paginas": 14,
+            "novos_links": 2,
+            "total_links_pagina": 2
+        },
+        {
+            "label": "Portal-do-sol - Até R$ 250k",
+            "paginas": 7,
+            "novos_links": 4,
+            "total_links_pagina": 4
+        },
+        {
+            "label": "Portal-do-sol - R$ 250k a R$ 400k",
+            "paginas": 7,
+            "novos_links": 4,
+            "total_links_pagina": 4
+        },
+        {
+            "label": "Portal-do-sol - R$ 400k a R$ 600k",
+            "paginas": 7,
+            "novos_links": 4,
+            "total_links_pagina": 4
+        },
+        {
+            "label": "Portal-do-sol - R$ 600k a R$ 900k",
+            "paginas": 7,
+            "novos_links": 4,
+            "total_links_pagina": 4
+        },
+        {
+            "label": "Portal-do-sol - R$ 900k a R$ 1.3M",
+            "paginas": 7,
+            "novos_links": 4,
+            "total_links_pagina": 4
+        },
+        {
+            "label": "Portal-do-sol - R$ 1.3M a R$ 2.0M",
+            "paginas": 7,
+            "novos_links": 4,
+            "total_links_pagina": 4
+        },
+        {
+            "label": "Portal-do-sol - Acima de R$ 2.0M",
+            "paginas": 7,
+            "novos_links": 4,
+            "total_links_pagina": 4
+        },
+        {
+            "label": "Mangabeira - Até R$ 250k",
+            "paginas": 11,
+            "novos_links": 4,
+            "total_links_pagina": 4
+        },
+        {
+            "label": "Mangabeira - R$ 250k a R$ 400k",
+            "paginas": 11,
+            "novos_links": 4,
+            "total_links_pagina": 4
+        },
+        {
+            "label": "Mangabeira - R$ 400k a R$ 600k",
+            "paginas": 11,
+            "novos_links": 7,
+            "total_links_pagina": 7
+        },
+        {
+            "label": "Mangabeira - R$ 600k a R$ 900k",
+            "paginas": 11,
+            "novos_links": 7,
+            "total_links_pagina": 7
+        },
+        {
+            "label": "Mangabeira - R$ 900k a R$ 1.3M",
+            "paginas": 11,
+            "novos_links": 7,
+            "total_links_pagina": 7
+        },
+        {
+            "label": "Mangabeira - R$ 1.3M a R$ 2.0M",
+            "paginas": 11,
+            "novos_links": 7,
+            "total_links_pagina": 7
+        },
+        {
+            "label": "Mangabeira - Acima de R$ 2.0M",
+            "paginas": 11,
+            "novos_links": 7,
+            "total_links_pagina": 7
+        },
+        {
+            "label": "Miramar - Até R$ 250k",
+            "paginas": 20,
+            "novos_links": 10,
+            "total_links_pagina": 10
+        },
+        {
+            "label": "Miramar - R$ 250k a R$ 400k",
+            "paginas": 20,
+            "novos_links": 5,
+            "total_links_pagina": 5
+        },
+        {
+            "label": "Miramar - R$ 400k a R$ 600k",
+            "paginas": 20,
+            "novos_links": 5,
+            "total_links_pagina": 5
+        },
+        {
+            "label": "Miramar - R$ 600k a R$ 900k",
+            "paginas": 20,
+            "novos_links": 5,
+            "total_links_pagina": 5
+        },
+        {
+            "label": "Miramar - R$ 900k a R$ 1.3M",
+            "paginas": 20,
+            "novos_links": 5,
+            "total_links_pagina": 5
+        },
+        {
+            "label": "Miramar - R$ 1.3M a R$ 2.0M",
+            "paginas": 20,
+            "novos_links": 6,
+            "total_links_pagina": 6
+        },
+        {
+            "label": "Miramar - Acima de R$ 2.0M",
+            "paginas": 20,
+            "novos_links": 6,
+            "total_links_pagina": 6
+        },
+        {
+            "label": "Estados - Até R$ 250k",
+            "paginas": 15,
+            "novos_links": 10,
+            "total_links_pagina": 10
+        },
+        {
+            "label": "Estados - R$ 250k a R$ 400k",
+            "paginas": 15,
+            "novos_links": 10,
+            "total_links_pagina": 10
+        },
+        {
+            "label": "Estados - R$ 400k a R$ 600k",
+            "paginas": 15,
+            "novos_links": 6,
+            "total_links_pagina": 6
+        },
+        {
+            "label": "Estados - R$ 600k a R$ 900k",
+            "paginas": 15,
+            "novos_links": 6,
+            "total_links_pagina": 6
+        },
+        {
+            "label": "Estados - R$ 900k a R$ 1.3M",
+            "paginas": 15,
+            "novos_links": 6,
+            "total_links_pagina": 6
+        },
+        {
+            "label": "Estados - R$ 1.3M a R$ 2.0M",
+            "paginas": 15,
+            "novos_links": 6,
+            "total_links_pagina": 6
+        },
+        {
+            "label": "Estados - Acima de R$ 2.0M",
+            "paginas": 15,
+            "novos_links": 7,
+            "total_links_pagina": 7
+        },
+        {
+            "label": "Expedicionarios - Até R$ 250k",
+            "paginas": 3,
+            "novos_links": 3,
+            "total_links_pagina": 3
+        },
+        {
+            "label": "Expedicionarios - R$ 250k a R$ 400k",
+            "paginas": 3,
+            "novos_links": 3,
+            "total_links_pagina": 3
+        },
+        {
+            "label": "Expedicionarios - R$ 400k a R$ 600k",
+            "paginas": 3,
+            "novos_links": 3,
+            "total_links_pagina": 3
+        },
+        {
+            "label": "Expedicionarios - R$ 600k a R$ 900k",
+            "paginas": 3,
+            "novos_links": 3,
+            "total_links_pagina": 3
+        },
+        {
+            "label": "Expedicionarios - R$ 900k a R$ 1.3M",
+            "paginas": 3,
+            "novos_links": 3,
+            "total_links_pagina": 3
+        },
+        {
+            "label": "Expedicionarios - R$ 1.3M a R$ 2.0M",
+            "paginas": 3,
+            "novos_links": 3,
+            "total_links_pagina": 3
+        },
+        {
+            "label": "Expedicionarios - Acima de R$ 2.0M",
+            "paginas": 3,
+            "novos_links": 1,
+            "total_links_pagina": 1
+        },
+        {
+            "label": "Torre - Até R$ 250k",
+            "paginas": 4,
+            "novos_links": 2,
+            "total_links_pagina": 2
+        },
+        {
+            "label": "Torre - R$ 250k a R$ 400k",
+            "paginas": 4,
+            "novos_links": 2,
+            "total_links_pagina": 2
+        },
+        {
+            "label": "Torre - R$ 400k a R$ 600k",
+            "paginas": 4,
+            "novos_links": 2,
+            "total_links_pagina": 2
+        },
+        {
+            "label": "Torre - R$ 600k a R$ 900k",
+            "paginas": 4,
+            "novos_links": 2,
+            "total_links_pagina": 2
+        },
+        {
+            "label": "Torre - R$ 900k a R$ 1.3M",
+            "paginas": 4,
+            "novos_links": 2,
+            "total_links_pagina": 2
+        },
+        {
+            "label": "Torre - R$ 1.3M a R$ 2.0M",
+            "paginas": 4,
+            "novos_links": 2,
+            "total_links_pagina": 2
+        },
+        {
+            "label": "Torre - Acima de R$ 2.0M",
+            "paginas": 4,
+            "novos_links": 2,
+            "total_links_pagina": 2
+        },
+        {
+            "label": "Ipes - Até R$ 250k",
+            "paginas": 1,
+            "novos_links": 8,
+            "total_links_pagina": 8
+        },
+        {
+            "label": "Ipes - R$ 250k a R$ 400k",
+            "paginas": 1,
+            "novos_links": 8,
+            "total_links_pagina": 8
+        },
+        {
+            "label": "Ipes - R$ 400k a R$ 600k",
+            "paginas": 1,
+            "novos_links": 8,
+            "total_links_pagina": 8
+        },
+        {
+            "label": "Ipes - R$ 600k a R$ 900k",
+            "paginas": 1,
+            "novos_links": 8,
+            "total_links_pagina": 8
+        },
+        {
+            "label": "Ipes - R$ 900k a R$ 1.3M",
+            "paginas": 1,
+            "novos_links": 8,
+            "total_links_pagina": 8
+        },
+        {
+            "label": "Ipes - R$ 1.3M a R$ 2.0M",
+            "paginas": 1,
+            "novos_links": 0,
+            "total_links_pagina": 0
+        },
+        {
+            "label": "Ipes - Acima de R$ 2.0M",
+            "paginas": 1,
+            "novos_links": 0,
+            "total_links_pagina": 0
+        },
+        {
+            "label": "Cristo-redentor - Até R$ 250k",
+            "paginas": 7,
+            "novos_links": 4,
+            "total_links_pagina": 4
+        },
+        {
+            "label": "Cristo-redentor - R$ 250k a R$ 400k",
+            "paginas": 7,
+            "novos_links": 4,
+            "total_links_pagina": 4
+        },
+        {
+            "label": "Cristo-redentor - R$ 400k a R$ 600k",
+            "paginas": 7,
+            "novos_links": 4,
+            "total_links_pagina": 4
+        },
+        {
+            "label": "Cristo-redentor - R$ 600k a R$ 900k",
+            "paginas": 7,
+            "novos_links": 4,
+            "total_links_pagina": 5
+        },
+        {
+            "label": "Cristo-redentor - R$ 900k a R$ 1.3M",
+            "paginas": 7,
+            "novos_links": 4,
+            "total_links_pagina": 4
+        },
+        {
+            "label": "Cristo-redentor - R$ 1.3M a R$ 2.0M",
+            "paginas": 7,
+            "novos_links": 4,
+            "total_links_pagina": 4
+        },
+        {
+            "label": "Cristo-redentor - Acima de R$ 2.0M",
+            "paginas": 7,
+            "novos_links": 4,
+            "total_links_pagina": 5
+        },
+        {
+            "label": "Bancarios - Até R$ 250k",
+            "paginas": 18,
+            "novos_links": 328,
+            "total_links_pagina": 335
+        },
+        {
+            "label": "Bancarios - R$ 250k a R$ 400k",
+            "paginas": 18,
+            "novos_links": 2,
+            "total_links_pagina": 2
+        },
+        {
+            "label": "Bancarios - R$ 400k a R$ 600k",
+            "paginas": 18,
+            "novos_links": 20,
+            "total_links_pagina": 20
+        },
+        {
+            "label": "Bancarios - R$ 600k a R$ 900k",
+            "paginas": 18,
+            "novos_links": 20,
+            "total_links_pagina": 20
+        },
+        {
+            "label": "Bancarios - R$ 900k a R$ 1.3M",
+            "paginas": 18,
+            "novos_links": 0,
+            "total_links_pagina": 0
+        },
+        {
+            "label": "Bancarios - R$ 1.3M a R$ 2.0M",
+            "paginas": 18,
+            "novos_links": 0,
+            "total_links_pagina": 0
+        },
+        {
+            "label": "Bancarios - Acima de R$ 2.0M",
+            "paginas": 18,
+            "novos_links": 0,
+            "total_links_pagina": 0
+        },
+        {
+            "label": "Agua-fria - Até R$ 250k",
+            "paginas": 3,
+            "novos_links": 41,
+            "total_links_pagina": 41
+        },
+        {
+            "label": "Agua-fria - R$ 250k a R$ 400k",
+            "paginas": 3,
+            "novos_links": 41,
+            "total_links_pagina": 41
+        },
+        {
+            "label": "Agua-fria - R$ 400k a R$ 600k",
+            "paginas": 3,
+            "novos_links": 0,
+            "total_links_pagina": 0
+        },
+        {
+            "label": "Agua-fria - R$ 600k a R$ 900k",
+            "paginas": 3,
+            "novos_links": 0,
+            "total_links_pagina": 0
+        },
+        {
+            "label": "Agua-fria - R$ 900k a R$ 1.3M",
+            "paginas": 3,
+            "novos_links": 0,
+            "total_links_pagina": 0
+        },
+        {
+            "label": "Agua-fria - R$ 1.3M a R$ 2.0M",
+            "paginas": 3,
+            "novos_links": 0,
+            "total_links_pagina": 0
+        },
+        {
+            "label": "Agua-fria - Acima de R$ 2.0M",
+            "paginas": 3,
+            "novos_links": 0,
+            "total_links_pagina": 0
+        },
+        {
+            "label": "Gramame - Até R$ 250k",
+            "paginas": 19,
+            "novos_links": 353,
+            "total_links_pagina": 353
+        },
+        {
+            "label": "Gramame - R$ 250k a R$ 400k",
+            "paginas": 19,
+            "novos_links": 43,
+            "total_links_pagina": 43
+        },
+        {
+            "label": "Gramame - R$ 400k a R$ 600k",
+            "paginas": 19,
+            "novos_links": 5,
+            "total_links_pagina": 5
+        },
+        {
+            "label": "Gramame - R$ 600k a R$ 900k",
+            "paginas": 19,
+            "novos_links": 5,
+            "total_links_pagina": 5
+        },
+        {
+            "label": "Gramame - R$ 900k a R$ 1.3M",
+            "paginas": 19,
+            "novos_links": 5,
+            "total_links_pagina": 5
+        },
+        {
+            "label": "Gramame - R$ 1.3M a R$ 2.0M",
+            "paginas": 19,
+            "novos_links": 5,
+            "total_links_pagina": 5
+        },
+        {
+            "label": "Gramame - Acima de R$ 2.0M",
+            "paginas": 19,
+            "novos_links": 4,
+            "total_links_pagina": 4
+        },
+        {
+            "label": "Castelo-branco - Até R$ 250k",
+            "paginas": 1,
+            "novos_links": 20,
+            "total_links_pagina": 20
+        },
+        {
+            "label": "Castelo-branco - R$ 250k a R$ 400k",
+            "paginas": 1,
+            "novos_links": 20,
+            "total_links_pagina": 20
+        },
+        {
+            "label": "Castelo-branco - R$ 400k a R$ 600k",
+            "paginas": 1,
+            "novos_links": 20,
+            "total_links_pagina": 20
+        },
+        {
+            "label": "Castelo-branco - R$ 600k a R$ 900k",
+            "paginas": 1,
+            "novos_links": 0,
+            "total_links_pagina": 0
+        },
+        {
+            "label": "Castelo-branco - R$ 900k a R$ 1.3M",
+            "paginas": 1,
+            "novos_links": 0,
+            "total_links_pagina": 0
+        },
+        {
+            "label": "Castelo-branco - R$ 1.3M a R$ 2.0M",
+            "paginas": 1,
+            "novos_links": 0,
+            "total_links_pagina": 0
+        },
+        {
+            "label": "Castelo-branco - Acima de R$ 2.0M",
+            "paginas": 1,
+            "novos_links": 0,
+            "total_links_pagina": 0
+        },
+        {
+            "label": "Pedro-gondim - Até R$ 250k",
+            "paginas": 3,
+            "novos_links": 45,
+            "total_links_pagina": 45
+        },
+        {
+            "label": "Pedro-gondim - R$ 250k a R$ 400k",
+            "paginas": 3,
+            "novos_links": 12,
+            "total_links_pagina": 12
+        },
+        {
+            "label": "Pedro-gondim - R$ 400k a R$ 600k",
+            "paginas": 3,
+            "novos_links": 12,
+            "total_links_pagina": 12
+        },
+        {
+            "label": "Pedro-gondim - R$ 600k a R$ 900k",
+            "paginas": 3,
+            "novos_links": 12,
+            "total_links_pagina": 12
+        },
+        {
+            "label": "Pedro-gondim - R$ 900k a R$ 1.3M",
+            "paginas": 3,
+            "novos_links": 12,
+            "total_links_pagina": 12
+        },
+        {
+            "label": "Pedro-gondim - R$ 1.3M a R$ 2.0M",
+            "paginas": 3,
+            "novos_links": 0,
+            "total_links_pagina": 0
+        },
+        {
+            "label": "Pedro-gondim - Acima de R$ 2.0M",
+            "paginas": 3,
+            "novos_links": 0,
+            "total_links_pagina": 0
+        },
+        {
+            "label": "Centro - Até R$ 250k",
+            "paginas": 1,
+            "novos_links": 11,
+            "total_links_pagina": 11
+        },
+        {
+            "label": "Centro - R$ 250k a R$ 400k",
+            "paginas": 1,
+            "novos_links": 11,
+            "total_links_pagina": 11
+        },
+        {
+            "label": "Centro - R$ 400k a R$ 600k",
+            "paginas": 1,
+            "novos_links": 11,
+            "total_links_pagina": 11
+        },
+        {
+            "label": "Centro - R$ 600k a R$ 900k",
+            "paginas": 1,
+            "novos_links": 11,
+            "total_links_pagina": 11
+        },
+        {
+            "label": "Centro - R$ 900k a R$ 1.3M",
+            "paginas": 1,
+            "novos_links": 0,
+            "total_links_pagina": 0
+        },
+        {
+            "label": "Centro - R$ 1.3M a R$ 2.0M",
+            "paginas": 1,
+            "novos_links": 0,
+            "total_links_pagina": 0
+        },
+        {
+            "label": "Centro - Acima de R$ 2.0M",
+            "paginas": 1,
+            "novos_links": 0,
+            "total_links_pagina": 0
+        },
+        {
+            "label": "Jaguaribe - Até R$ 250k",
+            "paginas": 2,
+            "novos_links": 31,
+            "total_links_pagina": 31
+        },
+        {
+            "label": "Jaguaribe - R$ 250k a R$ 400k",
+            "paginas": 2,
+            "novos_links": 31,
+            "total_links_pagina": 31
+        },
+        {
+            "label": "Jaguaribe - R$ 400k a R$ 600k",
+            "paginas": 2,
+            "novos_links": 1,
+            "total_links_pagina": 1
+        },
+        {
+            "label": "Jaguaribe - R$ 600k a R$ 900k",
+            "paginas": 2,
+            "novos_links": 1,
+            "total_links_pagina": 1
+        },
+        {
+            "label": "Jaguaribe - R$ 900k a R$ 1.3M",
+            "paginas": 2,
+            "novos_links": 1,
+            "total_links_pagina": 1
+        },
+        {
+            "label": "Jaguaribe - R$ 1.3M a R$ 2.0M",
+            "paginas": 2,
+            "novos_links": 1,
+            "total_links_pagina": 1
+        },
+        {
+            "label": "Jaguaribe - Acima de R$ 2.0M",
+            "paginas": 2,
+            "novos_links": 1,
+            "total_links_pagina": 1
+        },
+        {
+            "label": "Cuia - Até R$ 250k",
+            "paginas": 4,
+            "novos_links": 74,
+            "total_links_pagina": 74
+        },
+        {
+            "label": "Cuia - R$ 250k a R$ 400k",
+            "paginas": 4,
+            "novos_links": 45,
+            "total_links_pagina": 45
+        },
+        {
+            "label": "Cuia - R$ 400k a R$ 600k",
+            "paginas": 4,
+            "novos_links": 0,
+            "total_links_pagina": 0
+        },
+        {
+            "label": "Cuia - R$ 600k a R$ 900k",
+            "paginas": 4,
+            "novos_links": 0,
+            "total_links_pagina": 0
+        },
+        {
+            "label": "Cuia - R$ 900k a R$ 1.3M",
+            "paginas": 4,
+            "novos_links": 0,
+            "total_links_pagina": 0
+        },
+        {
+            "label": "Cuia - R$ 1.3M a R$ 2.0M",
+            "paginas": 4,
+            "novos_links": 0,
+            "total_links_pagina": 0
+        },
+        {
+            "label": "Cuia - Acima de R$ 2.0M",
+            "paginas": 4,
+            "novos_links": 0,
+            "total_links_pagina": 0
+        },
+        {
+            "label": "Funcionarios - Até R$ 250k",
+            "paginas": 2,
+            "novos_links": 26,
+            "total_links_pagina": 26
+        },
+        {
+            "label": "Funcionarios - R$ 250k a R$ 400k",
+            "paginas": 2,
+            "novos_links": 16,
+            "total_links_pagina": 16
+        },
+        {
+            "label": "Funcionarios - R$ 400k a R$ 600k",
+            "paginas": 2,
+            "novos_links": 16,
+            "total_links_pagina": 16
+        },
+        {
+            "label": "Funcionarios - R$ 600k a R$ 900k",
+            "paginas": 2,
+            "novos_links": 16,
+            "total_links_pagina": 16
+        },
+        {
+            "label": "Funcionarios - R$ 900k a R$ 1.3M",
+            "paginas": 2,
+            "novos_links": 0,
+            "total_links_pagina": 0
+        },
+        {
+            "label": "Funcionarios - R$ 1.3M a R$ 2.0M",
+            "paginas": 2,
+            "novos_links": 0,
+            "total_links_pagina": 0
+        },
+        {
+            "label": "Funcionarios - Acima de R$ 2.0M",
+            "paginas": 2,
+            "novos_links": 0,
+            "total_links_pagina": 0
+        },
+        {
+            "label": "Rangel - Até R$ 250k",
+            "paginas": 1,
+            "novos_links": 5,
+            "total_links_pagina": 5
+        },
+        {
+            "label": "Rangel - R$ 250k a R$ 400k",
+            "paginas": 1,
+            "novos_links": 5,
+            "total_links_pagina": 5
+        },
+        {
+            "label": "Rangel - R$ 400k a R$ 600k",
+            "paginas": 1,
+            "novos_links": 5,
+            "total_links_pagina": 5
+        },
+        {
+            "label": "Rangel - R$ 600k a R$ 900k",
+            "paginas": 1,
+            "novos_links": 5,
+            "total_links_pagina": 5
+        },
+        {
+            "label": "Rangel - R$ 900k a R$ 1.3M",
+            "paginas": 1,
+            "novos_links": 5,
+            "total_links_pagina": 5
+        },
+        {
+            "label": "Rangel - R$ 1.3M a R$ 2.0M",
+            "paginas": 1,
+            "novos_links": 5,
+            "total_links_pagina": 5
+        },
+        {
+            "label": "Rangel - Acima de R$ 2.0M",
+            "paginas": 1,
+            "novos_links": 5,
+            "total_links_pagina": 5
+        },
+        {
+            "label": "Grotao - Até R$ 250k",
+            "paginas": 1,
+            "novos_links": 0,
+            "total_links_pagina": 0
+        },
+        {
+            "label": "Grotao - R$ 250k a R$ 400k",
+            "paginas": 1,
+            "novos_links": 0,
+            "total_links_pagina": 0
+        },
+        {
+            "label": "Grotao - R$ 400k a R$ 600k",
+            "paginas": 1,
+            "novos_links": 0,
+            "total_links_pagina": 0
+        },
+        {
+            "label": "Grotao - R$ 600k a R$ 900k",
+            "paginas": 1,
+            "novos_links": 0,
+            "total_links_pagina": 0
+        },
+        {
+            "label": "Grotao - R$ 900k a R$ 1.3M",
+            "paginas": 1,
+            "novos_links": 0,
+            "total_links_pagina": 0
+        },
+        {
+            "label": "Grotao - R$ 1.3M a R$ 2.0M",
+            "paginas": 1,
+            "novos_links": 0,
+            "total_links_pagina": 0
+        },
+        {
+            "label": "Grotao - Acima de R$ 2.0M",
+            "paginas": 1,
+            "novos_links": 0,
+            "total_links_pagina": 0
+        },
+        {
+            "label": "Penha - Até R$ 250k",
+            "paginas": 1,
+            "novos_links": 2,
+            "total_links_pagina": 2
+        },
+        {
+            "label": "Penha - R$ 250k a R$ 400k",
+            "paginas": 1,
+            "novos_links": 1,
+            "total_links_pagina": 1
+        },
+        {
+            "label": "Penha - R$ 400k a R$ 600k",
+            "paginas": 1,
+            "novos_links": 1,
+            "total_links_pagina": 1
+        },
+        {
+            "label": "Penha - R$ 600k a R$ 900k",
+            "paginas": 1,
+            "novos_links": 1,
+            "total_links_pagina": 1
+        },
+        {
+            "label": "Penha - R$ 900k a R$ 1.3M",
+            "paginas": 1,
+            "novos_links": 1,
+            "total_links_pagina": 1
+        },
+        {
+            "label": "Penha - R$ 1.3M a R$ 2.0M",
+            "paginas": 1,
+            "novos_links": 1,
+            "total_links_pagina": 1
+        },
+        {
+            "label": "Penha - Acima de R$ 2.0M",
+            "paginas": 1,
+            "novos_links": 1,
+            "total_links_pagina": 1
+        }
+    ],
+    "fim_execucao": "2026-07-31T07:07:00.362110",
+    "duracao_total": "10:06:00",
+    "duracao_segundos": 36360.29
+}
