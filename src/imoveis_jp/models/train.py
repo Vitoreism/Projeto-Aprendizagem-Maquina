@@ -35,6 +35,7 @@ def _log(msg: str) -> None:
 
 SAIDA_RESULTADOS = config.PROCESSED / "resultados_modelos.csv"
 SAIDA_RELATORIO = config.INTERIM / "relatorio_treino.json"
+SAIDA_CV_FOLDS = config.PROCESSED / "cv_mae_por_fold.csv"
 
 FOLDS = 5
 
@@ -201,6 +202,7 @@ def executar() -> pd.DataFrame:
         _log(f"         {i}/{total}  {nome}")
 
     linhas = []
+    linhas_por_fold = []
     inicio_geral = time.perf_counter()
     for indice, (nome, modelo) in enumerate(modelos.items(), start=1):
         # a CV reajusta imputacao e escala dentro de cada fold.
@@ -237,6 +239,13 @@ def executar() -> pd.DataFrame:
 
         if not np.isfinite(mae_cv).all():
             raise RuntimeError(f"validacao cruzada de '{nome}' produziu score nao-finito")
+
+        # guardado fold a fold (e nao so a media) para a comparacao pareada da
+        # issue #25 -- GroupKFold nao embaralha, entao o indice de fold e
+        # comparavel entre modelos desde que X_tr/g_tr sejam os mesmos, o que
+        # ja e garantido pelo split unico feito acima.
+        for indice_fold, valor in enumerate(mae_cv):
+            linhas_por_fold.append({"modelo": nome, "fold": indice_fold, "mae_log": float(valor)})
 
         _log(f"[{nome}] (2/3) Ajustando no treino completo ({len(X_tr)} linhas)...")
         t0 = time.perf_counter()
@@ -275,6 +284,9 @@ def executar() -> pd.DataFrame:
     resultados = pd.DataFrame(linhas).sort_values("cv_mae_log_media").reset_index(drop=True)
     resultados.to_csv(SAIDA_RESULTADOS, index=False, encoding="utf-8")
 
+    cv_por_fold = pd.DataFrame(linhas_por_fold)
+    cv_por_fold.to_csv(SAIDA_CV_FOLDS, index=False, encoding="utf-8")
+
     with open(SAIDA_RELATORIO, "w", encoding="utf-8") as f:
         json.dump(
             {
@@ -306,6 +318,7 @@ def executar() -> pd.DataFrame:
     _log(resultados.to_string(index=False, float_format=lambda v: f"{v:,.4f}"))
     _log("=" * 72)
     _log(f"Resultados: {SAIDA_RESULTADOS}")
+    _log(f"CV por fold: {SAIDA_CV_FOLDS}")
     _log(f"Relatorio:  {SAIDA_RELATORIO}")
 
     return resultados

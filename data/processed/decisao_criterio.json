@@ -1,0 +1,35 @@
+{
+  "resultado": "vantagem_declarada",
+  "vencedor": "gradient_boosting_ajustado",
+  "ranking_cv": [
+    "gradient_boosting_ajustado",
+    "ridge",
+    "ols",
+    "arvore_decisao",
+    "mlp",
+    "knn"
+  ],
+  "medias_cv": {
+    "gradient_boosting_ajustado": 0.1988410761300129,
+    "ridge": 0.2551185691219204,
+    "ols": 0.2551256715350575,
+    "arvore_decisao": 0.28456180715963636,
+    "mlp": 0.31622228924266904,
+    "knn": 0.3202204158096366
+  },
+  "comparacao_pareada": {
+    "vencedor": "gradient_boosting_ajustado",
+    "desafiante": "ridge",
+    "diffs_por_fold": [
+      0.05823509005327124,
+      0.05598992220614568,
+      0.051666525537949815,
+      0.0569083822676241,
+      0.058587544894546706
+    ],
+    "diferenca_media": 0.056277492991907506,
+    "todas_as_folds_a_favor": true,
+    "vantagem_declarada": true
+  },
+  "ordem_desempate": null
+}
