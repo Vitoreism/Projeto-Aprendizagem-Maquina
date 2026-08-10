@@ -143,10 +143,29 @@ validada (contraste, banda de luminosidade e separação para daltonismo).
 2. ~~Extração via LLM das características que só existem na descrição~~
 3. ~~One-hot + matriz de correlação para enxugar atributos~~ → `src/imoveis_jp/features/`
 4. ~~Treino e avaliação dos modelos~~ → `src/imoveis_jp/models/`
-5. Comparar seis modelos sob protocolo pré-registrado → issues
-   [#20](../../issues/20) (infra, bloqueante), [#21](../../issues/21) árvore,
+5. ~~Comparar seis modelos sob protocolo pré-registrado~~ → issues
+   [#20](../../issues/20) (infra), [#21](../../issues/21) árvore,
    [#22](../../issues/22) KNN, [#23](../../issues/23) MLP,
-   [#24](../../issues/24) OLS, [#25](../../issues/25) comparação final
+   [#24](../../issues/24) OLS, [#25](../../issues/25) comparação final.
+   **Vencedor: `gradient_boosting_ajustado`, com vantagem declarada** — as cinco
+   folds a favor e diferença média de 0,0563, contra um limiar de 0,005.
+   Resultado, critério, variante PCA e t-SNE em
+   [docs/comparacao_modelos.md](docs/comparacao_modelos.md); fichas por modelo em
+   [docs/modelos/](docs/modelos/).
+
+### O que ficou em aberto
+
+- **Fixar as versões** no `requirements.txt` (hoje `scikit-learn>=1.3.0`) e
+  rerodar a cadeia uma vez. O particionamento do `GroupKFold` não é estável entre
+  versões, então duas máquinas produzem números até 0,0013 diferentes — abaixo do
+  limiar de 0,005 e sem efeito no ranking, mas é o furo que resta na regra "mesmo
+  split, mesmas folds" (§10 de [docs/comparacao_modelos.md](docs/comparacao_modelos.md)).
+- **Uniformizar o estágio de ajuste dos candidatos.** Só `ridge` e
+  `gradient_boosting_ajustado` foram inscritos com a configuração vencedora de
+  busca; árvore, KNN e MLP entraram na configuração inicial dos donos (§4 do mesmo
+  documento).
+- **Interação `bairro × area_util` explícita na matriz** — hoje só os modelos de
+  árvore a reconstroem sozinhos, o que enviesa a comparação a favor deles.
 
 ### Etapa 3 — como funciona
 
