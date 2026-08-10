@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  :root{
+    --tinta:#12212e;        /* texto principal */
+    --tinta2:#5a6a78;       /* texto secundário */
+    --linha:#c9d4dc;
+    --fundo:#ffffff;
+    --f-coleta:#eef4f8;
+    --f-dado:#eaf2ee;
+    --f-modelo:#eaeef7;
+    --f-diag:#faf1e6;
+    --a-coleta:#2c6b8f;
+    --a-dado:#2f7a55;
+    --a-modelo:#3a4f9c;
+    --a-diag:#a8641a;
+  }
+  body{
+    width:1600px; height:900px; background:var(--fundo);
+    font-family:"Segoe UI", system-ui, -apple-system, sans-serif;
+    color:var(--tinta); padding:44px 48px 40px; position:relative;
+  }
+  h1{ font-size:31px; font-weight:700; letter-spacing:-.4px; }
+  .sub{ font-size:16.5px; color:var(--tinta2); margin-top:7px; }
+  .sub b{ color:var(--tinta); font-weight:600; }
+
+  .trilhos{ display:flex; gap:0; margin-top:30px; align-items:stretch; }
+  .col{ flex:1; display:flex; flex-direction:column; }
+  .chev{ width:44px; display:flex; align-items:center; justify-content:center;
+         color:var(--linha); font-size:38px; font-weight:300; padding-bottom:34px; }
+
+  .faixa{ font-size:12.5px; font-weight:700; letter-spacing:1.6px; text-transform:uppercase;
+          padding-bottom:9px; margin-bottom:13px; border-bottom:2.5px solid; }
+  .c1 .faixa{ color:var(--a-coleta); border-color:var(--a-coleta); }
+  .c2 .faixa{ color:var(--a-dado);   border-color:var(--a-dado); }
+  .c3 .faixa{ color:var(--a-modelo); border-color:var(--a-modelo); }
+  .c4 .faixa{ color:var(--a-diag);   border-color:var(--a-diag); }
+
+  .caixa{ border-radius:10px; padding:17px 19px 18px; margin-bottom:15px; position:relative; }
+  .c1 .caixa{ background:var(--f-coleta); }
+  .c2 .caixa{ background:var(--f-dado); }
+  .c3 .caixa{ background:var(--f-modelo); }
+  .c4 .caixa{ background:var(--f-diag); }
+
+  .n{ position:absolute; top:12px; right:13px; font-size:12px; font-weight:700;
+      color:#fff; background:var(--tinta); opacity:.28; width:19px; height:19px;
+      border-radius:50%; display:flex; align-items:center; justify-content:center; }
+  .t{ font-size:19px; font-weight:650; line-height:1.25; padding-right:24px; }
+  .d{ font-size:14.5px; color:var(--tinta2); line-height:1.52; margin-top:7px; }
+  .num{ font-size:14.5px; font-weight:700; margin-top:10px; letter-spacing:-.1px; }
+  .c1 .num{ color:var(--a-coleta); } .c2 .num{ color:var(--a-dado); }
+  .c3 .num{ color:var(--a-modelo); } .c4 .num{ color:var(--a-diag); }
+  code{ font-family:Consolas,"Courier New",monospace; font-size:13.5px;
+        background:rgba(18,33,46,.07); padding:1px 5px; border-radius:4px; white-space:nowrap; }
+
+  .destaque{ box-shadow:inset 0 0 0 2.5px var(--a-modelo); }
+  .selo{ display:inline-block; font-size:11.5px; font-weight:700; letter-spacing:.4px;
+         color:#fff; background:var(--a-modelo); border-radius:4px; padding:2px 7px; margin-top:8px; }
+
+  .loop{ position:absolute; left:48px; right:48px; bottom:30px; height:74px; }
+  .loop svg{ width:100%; height:100%; overflow:visible; }
+  .loop .rot{ position:absolute; left:50%; transform:translateX(-50%); top:0;
+              font-size:15px; color:var(--a-diag); font-weight:650; white-space:nowrap; }
+  .loop .rot span{ color:var(--tinta2); font-weight:400; }
+</style>
+</head>
+<body>
+
+<h1>Do anúncio ao modelo — o pipeline</h1>
+<div class="sub">
+  Previsão de preço de apartamentos em João Pessoa (PB) &nbsp;·&nbsp;
+  <b>22.599</b> anúncios brutos → <b>15.476</b> imóveis → <b>76</b> atributos →
+  <b>6</b> modelos comparados sob protocolo pré-registrado
+</div>
+
+<div class="trilhos">
+
+  <div class="col c1">
+    <div class="faixa">Coleta</div>
+    <div class="caixa"><div class="n">1</div>
+      <div class="t">Dois portais</div>
+      <div class="d">Scrapers independentes, resumíveis e shardáveis. <code>robots.txt</code> verificado; <code>ai-train=no</code> respeitado.</div>
+      <div class="num">chavesnamao ~10,7 mil &nbsp;·&nbsp; zap ~11,8 mil</div>
+    </div>
+    <div class="caixa"><div class="n">2</div>
+      <div class="t">Parsing</div>
+      <div class="d">HTML → JSON estruturado, campo a campo, por seletor CSS.</div>
+      <div class="num">22.599 anúncios brutos</div>
+    </div>
+    <div class="caixa"><div class="n">3</div>
+      <div class="t">Enriquecimento</div>
+      <div class="d"><b>LLM</b> para comodidades em texto livre — schema de 45 atributos descoberto numa amostra de 1.000. <b>Regex</b> para campos numéricos.</div>
+      <div class="num">precisão validada: 86% a 94%</div>
+    </div>
+  </div>
+
+  <div class="chev">›</div>
+
+  <div class="col c2">
+    <div class="faixa">Preparação do dado</div>
+    <div class="caixa"><div class="n">4</div>
+      <div class="t">Deduplicação</div>
+      <div class="d">Chave <code>(bairro, preço, área, quartos)</code> funde o mesmo imóvel anunciado nos dois portais.</div>
+      <div class="num">22.599 − 7.016 = 15.476 imóveis</div>
+    </div>
+    <div class="caixa"><div class="n">5</div>
+      <div class="t">Matriz de atributos</div>
+      <div class="d">Funde sinônimos, repara numéricas corrompidas, descarta comodidade rara e valor implausível.</div>
+      <div class="num">231 → 76 atributos</div>
+    </div>
+    <div class="caixa"><div class="n">6</div>
+      <div class="t">Correlação</div>
+      <div class="d">Ranking contra o alvo e poda de redundância (|r| ≥ 0,85). <b>EDA — não filtra o treino.</b></div>
+      <div class="num">area_util +0,70 &nbsp;·&nbsp; suites +0,66</div>
+    </div>
+  </div>
+
+  <div class="chev">›</div>
+
+  <div class="col c3">
+    <div class="faixa">Modelagem</div>
+    <div class="caixa destaque"><div class="n">7</div>
+      <div class="t">Split agrupado 80/20</div>
+      <div class="d">Por <b>imóvel físico</b> — o mesmo apartamento aparece em até 7 anúncios. Semente 42.</div>
+      <div class="num">12.214 treino · 3.087 teste · 0 vazados</div>
+    </div>
+    <div class="caixa destaque"><div class="n">8</div>
+      <div class="t">Pipeline dentro do fold</div>
+      <div class="d">Imputação, escala <b>e one-hot</b> reajustados a cada fold — nenhuma estatística atravessa a fronteira.</div>
+      <div class="num">76 → 132 colunas</div>
+    </div>
+    <div class="caixa"><div class="n">9</div>
+      <div class="t">Treino e decisão</div>
+      <div class="d"><code>GroupKFold(5)</code> no treino. Critério escrito antes: 5/5 folds + Δ ≥ 0,005. O teste é tocado <b>uma vez</b>.</div>
+      <div class="num">6 candidatos + 2 referências</div>
+      <div class="selo">Gradient Boosting — Δ 0,0563</div>
+    </div>
+  </div>
+
+  <div class="chev">›</div>
+
+  <div class="col c4">
+    <div class="faixa">Diagnóstico</div>
+    <div class="caixa"><div class="n">10</div>
+      <div class="t">Resíduos e permutação</div>
+      <div class="d">Onde erra e do que depende. O viés troca de sinal do Q1 ao Q5: o modelo puxa tudo para o meio.</div>
+      <div class="num">bairro +0,216 · area_util +0,206</div>
+    </div>
+    <div class="caixa"><div class="n">11</div>
+      <div class="t">PCA e t-SNE</div>
+      <div class="d">Hipótese registrada antes: PCA piora — projeção linear não cria a interação não-linear que falta. t-SNE é EDA pura.</div>
+      <div class="num">piorou nos 6, de +0,014 a +0,092</div>
+    </div>
+    <div class="caixa" style="background:#12212e;">
+      <div class="t" style="color:#fff;">Resultado</div>
+      <div class="d" style="color:#b8c6d2;">Erro percentual mediano no teste, com R² de 0,897 em log.</div>
+      <div class="num" style="color:#7fd1a8; font-size:22px; margin-top:6px;">15,6% &nbsp;·&nbsp; R$ 170 mil</div>
+    </div>
+  </div>
+
+</div>
+
+<div class="loop">
+  <svg viewBox="0 0 1504 74" preserveAspectRatio="none">
+    <path d="M 1332 30 L 1332 56 L 558 56 L 558 34"
+          fill="none" stroke="#a8641a" stroke-width="2.5"
+          stroke-dasharray="8 6" stroke-linecap="round"/>
+    <path d="M 558 26 L 550 40 L 566 40 Z" fill="#a8641a"/>
+  </svg>
+  <div class="rot">O diagnóstico realimentou o dado <b>três vezes</b>
+    <span>— bairro errado em 14% &nbsp;·&nbsp; preço que era ágio &nbsp;·&nbsp; venda direta de banco</span>
+  </div>
+</div>
+
+</body>
+</html>
